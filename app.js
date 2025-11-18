@@ -3,6 +3,7 @@ class AquaFlowApp {
     constructor() {
         this.customers = [];
         this.deliveries = [];
+        this.notifications = [];
         this.currentView = 'dashboard';
         this.scannerActive = false;
         this.currentCustomerId = null;
@@ -106,7 +107,8 @@ class AquaFlowApp {
         // Use Promise.all to load data concurrently and provide better user experience
         await Promise.all([
             this.loadCustomers(),
-            this.loadRecentDeliveries()
+            this.loadRecentDeliveries(),
+            this.loadNotifications()
         ]);
         this.updateDashboard();
         
@@ -176,6 +178,135 @@ class AquaFlowApp {
         }
     }
 
+    async loadNotifications() {
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            
+            if (!this.userId) return;
+
+            const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
+            
+            const snapshot = await notificationsRef
+                .orderBy('timestamp', 'desc')
+                .limit(50)
+                .get();
+            
+            this.notifications = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            
+            this.updateNotificationBadge();
+            this.displayNotifications();
+            
+        } catch (error) {
+            console.error('Error loading notifications:', error);
+        }
+    }
+
+    async addNotification(title, message, type = 'info') {
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            
+            const notificationData = {
+                title: title,
+                message: message,
+                type: type,
+                read: false,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications').add(notificationData);
+            
+            // Reload notifications
+            await this.loadNotifications();
+            
+        } catch (error) {
+            console.error('Error adding notification:', error);
+        }
+    }
+
+    updateNotificationBadge() {
+        const unreadCount = this.notifications.filter(notification => !notification.read).length;
+        const badge = document.getElementById('notificationCount');
+        
+        if (badge) {
+            if (unreadCount > 0) {
+                badge.textContent = unreadCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    }
+
+    displayNotifications() {
+        const container = document.getElementById('notificationsList');
+        if (!container) return;
+
+        if (this.notifications.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-bell-slash"></i>
+                    <h3>No Notifications</h3>
+                    <p>You're all caught up!</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = this.notifications.map(notification => {
+            const timestamp = notification.timestamp?.toDate ? notification.timestamp.toDate() : new Date();
+            const timeAgo = this.getTimeAgo(timestamp);
+            
+            return `
+                <div class="notification-item ${notification.read ? '' : 'unread'}" data-id="${notification.id}">
+                    <div class="notification-icon ${notification.type}">
+                        <i class="fas fa-${this.getNotificationIcon(notification.type)}"></i>
+                    </div>
+                    <div class="notification-content">
+                        <h4>${notification.title}</h4>
+                        <p>${notification.message}</p>
+                        <span class="notification-time">${timeAgo}</span>
+                    </div>
+                    <div class="notification-actions">
+                        ${!notification.read ? `
+                            <button class="btn btn-icon" onclick="markNotificationAsRead('${notification.id}')" title="Mark as read">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-icon" onclick="deleteNotification('${notification.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    getNotificationIcon(type) {
+        const icons = {
+            'info': 'info-circle',
+            'success': 'check-circle',
+            'warning': 'exclamation-triangle',
+            'error': 'exclamation-circle',
+            'delivery': 'truck',
+            'payment': 'rupee-sign'
+        };
+        return icons[type] || 'bell';
+    }
+
+    getTimeAgo(date) {
+        const now = new Date();
+        const diffInSeconds = Math.floor((now - date) / 1000);
+        
+        if (diffInSeconds < 60) return 'Just now';
+        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+        if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+        return date.toLocaleDateString();
+    }
+
     // Customer Management
     displayCustomers() {
         const container = document.getElementById('customersList');
@@ -221,6 +352,9 @@ class AquaFlowApp {
                         </button>
                         <button class="btn btn-outline" onclick="viewCustomerDetails('${customer.id}')">
                             <i class="fas fa-eye"></i> View
+                        </button>
+                        <button class="btn btn-outline" onclick="editCustomer('${customer.id}')">
+                            <i class="fas fa-edit"></i> Edit
                         </button>
                     </div>
                 </div>
@@ -287,6 +421,9 @@ class AquaFlowApp {
             // Generate QR code
             await this.generateAndStoreQRCode(docRef.id, customerData);
 
+            // Add notification
+            await this.addNotification('New Customer Added', `Added customer: ${customerData.name}`, 'success');
+
             // Reset form and close modal
             e.target.reset();
             this.closeModal('addCustomerModal');
@@ -300,6 +437,119 @@ class AquaFlowApp {
             console.error('Error adding customer:', error);
             showError('Failed to add customer');
         }
+    }
+
+    async updateCustomer(e) {
+        e.preventDefault();
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const customerId = document.getElementById('editCustomerId').value;
+
+        const customerData = {
+            name: document.getElementById('editCustomerName').value,
+            phone: document.getElementById('editCustomerPhone').value,
+            address: document.getElementById('editCustomerAddress').value,
+            type: document.getElementById('editCustomerType').value,
+            pricePerCan: parseInt(document.getElementById('editCustomerPrice').value) || (this.userData ? this.userData.defaultPrice : 20),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        try {
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update(customerData);
+            
+            // Update local data
+            const customerIndex = this.customers.findIndex(c => c.id === customerId);
+            if (customerIndex !== -1) {
+                this.customers[customerIndex] = { ...this.customers[customerIndex], ...customerData };
+            }
+
+            // Add notification
+            await this.addNotification('Customer Updated', `Updated customer: ${customerData.name}`, 'info');
+
+            // Close modal and refresh
+            this.closeModal('editCustomerModal');
+            this.displayCustomers();
+            this.loadCustomerSelect();
+            
+            showSuccess('Customer updated successfully!');
+            
+        } catch (error) {
+            console.error('Error updating customer:', error);
+            showError('Failed to update customer');
+        }
+    }
+
+    async deleteCustomer(customerId) {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        try {
+            const customer = this.customers.find(c => c.id === customerId);
+            if (!customer) {
+                showError('Customer not found');
+                return;
+            }
+
+            // Delete customer document
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).delete();
+
+            // Delete associated deliveries
+            const deliveriesSnapshot = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries')
+                .where('customerId', '==', customerId)
+                .get();
+            
+            const deletePromises = deliveriesSnapshot.docs.map(doc => doc.ref.delete());
+            await Promise.all(deletePromises);
+
+            // Update local data
+            this.customers = this.customers.filter(c => c.id !== customerId);
+            this.deliveries = this.deliveries.filter(d => d.customerId !== customerId);
+
+            // Add notification
+            await this.addNotification('Customer Deleted', `Deleted customer: ${customer.name}`, 'warning');
+
+            // Refresh UI
+            this.displayCustomers();
+            this.loadCustomerSelect();
+            this.updateDashboard();
+            this.closeModal('deleteConfirmModal');
+            
+            showSuccess('Customer deleted successfully!');
+            
+        } catch (error) {
+            console.error('Error deleting customer:', error);
+            showError('Failed to delete customer');
+        }
+    }
+
+    async viewCustomerDetails(customerId) {
+        const customer = this.customers.find(c => c.id === customerId);
+        if (!customer) {
+            showError('Customer not found');
+            return;
+        }
+
+        // Calculate customer statistics
+        const customerDeliveries = this.deliveries.filter(d => d.customerId === customerId);
+        const totalCans = customerDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
+        
+        const currentMonth = getCurrentMonth();
+        const monthlyDeliveries = customerDeliveries.filter(d => d.month === currentMonth);
+        const monthlyCans = monthlyDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
+
+        // Populate details modal
+        document.getElementById('detailCustomerName').textContent = customer.name;
+        document.getElementById('detailCustomerPhone').textContent = customer.phone;
+        document.getElementById('detailCustomerAddress').textContent = customer.address;
+        document.getElementById('detailCustomerType').textContent = this.getCustomerTypeIcon(customer.type);
+        document.getElementById('detailCustomerPrice').textContent = `₹${customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20)}`;
+        document.getElementById('detailTotalDeliveries').textContent = customerDeliveries.length;
+        document.getElementById('detailTotalCans').textContent = totalCans;
+        document.getElementById('detailThisMonth').textContent = `${monthlyCans} cans`;
+
+        // Store customer ID for actions
+        document.getElementById('currentCustomerId').value = customerId;
+
+        this.showModal('customerDetailsModal');
     }
 
     async generateAndStoreQRCode(customerId, customerData) {
@@ -583,6 +833,10 @@ class AquaFlowApp {
             };
 
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
+            
+            // Add notification
+            const customer = this.customers.find(c => c.id === this.currentCustomerId);
+            await this.addNotification('Delivery Recorded', `Delivered ${quantity} can(s) to ${customer?.name || 'customer'}`, 'delivery');
             
             showSuccess(`Delivery recorded: ${quantity} can(s) delivered`);
             this.closeScanner();
@@ -1108,16 +1362,128 @@ function printBill(customerId, month) {
     window.print();
 }
 
+// CRUD Operations for Customers
 function viewCustomerDetails(customerId) {
-    showError('Customer details view coming soon!');
+    if (app) app.viewCustomerDetails(customerId);
+}
+
+function editCustomer(customerId) {
+    const customer = app.customers.find(c => c.id === customerId);
+    if (!customer) {
+        showError('Customer not found');
+        return;
+    }
+
+    // Populate edit form
+    document.getElementById('editCustomerId').value = customer.id;
+    document.getElementById('editCustomerName').value = customer.name;
+    document.getElementById('editCustomerPhone').value = customer.phone;
+    document.getElementById('editCustomerAddress').value = customer.address;
+    document.getElementById('editCustomerType').value = customer.type || 'home';
+    document.getElementById('editCustomerPrice').value = customer.pricePerCan || (app.userData ? app.userData.defaultPrice : 20);
+
+    app.showModal('editCustomerModal');
+}
+
+function updateCustomer(e) {
+    if (app) app.updateCustomer(e);
+}
+
+function deleteCustomer(customerId) {
+    const customer = app.customers.find(c => c.id === customerId);
+    if (!customer) {
+        showError('Customer not found');
+        return;
+    }
+
+    // Show confirmation modal
+    document.getElementById('deleteCustomerName').textContent = customer.name;
+    document.getElementById('customerToDelete').value = customerId;
+    app.showModal('deleteConfirmModal');
+}
+
+function confirmDeleteCustomer() {
+    const customerId = document.getElementById('customerToDelete').value;
+    if (customerId && app) {
+        app.deleteCustomer(customerId);
+    }
+}
+
+function editCustomerFromDetails() {
+    const customerId = document.getElementById('currentCustomerId').value;
+    app.closeModal('customerDetailsModal');
+    editCustomer(customerId);
+}
+
+function deleteCustomerFromDetails() {
+    const customerId = document.getElementById('currentCustomerId').value;
+    app.closeModal('customerDetailsModal');
+    deleteCustomer(customerId);
+}
+
+// Notifications Functions
+function showNotifications() {
+    if (app) app.showView('notificationsView');
+}
+
+async function markNotificationAsRead(notificationId) {
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).update({
+            read: true
+        });
+
+        // Reload notifications
+        await app.loadNotifications();
+        
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+        showError('Failed to mark notification as read');
+    }
+}
+
+async function deleteNotification(notificationId) {
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).delete();
+
+        // Reload notifications
+        await app.loadNotifications();
+        
+    } catch (error) {
+        console.error('Error deleting notification:', error);
+        showError('Failed to delete notification');
+    }
+}
+
+async function clearAllNotifications() {
+    if (!confirm('Are you sure you want to clear all notifications? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications');
+        
+        const snapshot = await notificationsRef.get();
+        const deletePromises = snapshot.docs.map(doc => doc.ref.delete());
+        await Promise.all(deletePromises);
+
+        // Reload notifications
+        await app.loadNotifications();
+        
+        showSuccess('All notifications cleared successfully!');
+        
+    } catch (error) {
+        console.error('Error clearing notifications:', error);
+        showError('Failed to clear notifications');
+    }
 }
 
 function showAllDeliveries() {
     showError('All deliveries view coming soon!');
-}
-
-function showNotifications() {
-    showError('Notifications feature coming soon!');
 }
 
 function showSettings() {
@@ -1126,4 +1492,8 @@ function showSettings() {
 
 function logout() {
     authManager.logout();
+}
+
+function addCustomer(e) {
+    if (app) app.addCustomer(e);
 }
