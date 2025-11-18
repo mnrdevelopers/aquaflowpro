@@ -1,11 +1,12 @@
 // Firebase Configuration - Replace with your actual Firebase config
 const firebaseConfig = {
-    apiKey: "your-api-key-here",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "your-app-id"
+  apiKey: "AIzaSyCqT81J9D6JJChtfwlpXgc8DE0bDkWy4ls",
+  authDomain: "aquaflowpro-2ae5a.firebaseapp.com",
+  projectId: "aquaflowpro-2ae5a",
+  storageBucket: "aquaflowpro-2ae5a.firebasestorage.app",
+  messagingSenderId: "898374055700",
+  appId: "1:898374055700:web:ed500d8948db9d0df33401",
+  measurementId: "G-7DPYRDT1F1"
 };
 
 // Initialize Firebase
