@@ -3,7 +3,7 @@ class AuthManager {
     constructor() {
         this.currentUser = null;
         this.userData = null;
-        this.authStateReady = false; // CRITICAL: Track if auth state is settled
+        this.authStateReady = false;
         this.init();
     }
 
@@ -16,23 +16,25 @@ class AuthManager {
         auth.onAuthStateChanged(async (user) => {
             console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
             this.currentUser = user;
-            this.authStateReady = true; // CRITICAL: Mark auth state as settled
+            this.authStateReady = true;
             
             if (user) {
                 // User is signed in
-                await this.loadUserData(user);
+                const userDataLoaded = await this.loadUserData(user);
                 
-                // CRITICAL FIX: Only redirect if we're on auth page AND user data is loaded
-                if (window.location.pathname.includes('auth.html') && this.userData) {
+                // CRITICAL FIX: Only redirect if we're on auth page AND user data is successfully loaded
+                if (window.location.pathname.includes('auth.html') && userDataLoaded) {
                     console.log('Redirecting to app.html - User authenticated with data');
                     window.location.href = 'app.html';
+                } else if (window.location.pathname.includes('auth.html') && !userDataLoaded) {
+                    console.log('User authenticated but data missing - staying on auth page');
+                    // Don't redirect if data is missing
                 }
             } else {
                 // User is signed out
                 this.userData = null;
                 localStorage.removeItem('userData');
                 
-                // CRITICAL FIX: Only redirect if we're on app page
                 if (window.location.pathname.includes('app.html')) {
                     console.log('Redirecting to auth.html - User signed out');
                     window.location.href = 'auth.html';
@@ -154,7 +156,7 @@ clearInputError(input) {
 }
 
 
-  async handleSignup(e) {
+   async handleSignup(e) {
         e.preventDefault();
         
         const businessName = document.getElementById('businessName').value;
@@ -193,38 +195,53 @@ clearInputError(input) {
             
             console.log('User account created:', user.uid);
             
-            // CRITICAL FIX: Wait briefly for auth state to propagate
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // CRITICAL FIX: Add delay to ensure auth state is propagated
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             
-            // CRITICAL FIX: Ensure data is written and wait for completion
-            await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
-                businessName: businessName,
-                ownerName: ownerName,
-                businessPhone: businessPhone,
-                businessAddress: businessAddress,
-                email: email,
-                defaultPrice: defaultPrice,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                subscription: 'free',
-                status: 'active'
-            });
+            // CRITICAL FIX: Better error handling for Firestore write
+            try {
+                console.log('Writing user data to Firestore...');
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
+                    businessName: businessName,
+                    ownerName: ownerName,
+                    businessPhone: businessPhone,
+                    businessAddress: businessAddress,
+                    email: email,
+                    defaultPrice: defaultPrice,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    subscription: 'free',
+                    status: 'active'
+                });
+                console.log('User data successfully written to Firestore');
+            } catch (firestoreError) {
+                console.error('Firestore write error:', firestoreError);
+                // If Firestore fails, delete the user account to maintain consistency
+                await user.delete();
+                throw new Error('Failed to create business profile. Please try again.');
+            }
 
-            console.log('User data written to Firestore');
+            // CRITICAL FIX: Force reload user data and verify it exists
+            console.log('Verifying user data was written...');
+            const userDataLoaded = await this.loadUserData(user);
             
-            // CRITICAL FIX: Force reload user data immediately after writing
-            await this.loadUserData(user);
+            if (!userDataLoaded) {
+                throw new Error('User data verification failed. Please try signing in again.');
+            }
             
-            showSuccess('Business account created successfully!');
+            showSuccess('Business account created successfully! Redirecting...');
             
-            // CRITICAL FIX: Manual redirect after ensuring data is loaded
+            // CRITICAL FIX: Manual redirect after successful verification
             setTimeout(() => {
                 if (this.userData) {
                     console.log('Manual redirect to app.html after successful signup');
                     window.location.href = 'app.html';
+                } else {
+                    console.error('Cannot redirect - user data still missing');
+                    showError('Account created but data issue detected. Please sign in manually.');
                 }
-            }, 1000);
+            }, 2000);
             
         } catch (error) {
             console.error('Signup error:', error);
@@ -255,32 +272,39 @@ clearInputError(input) {
     }
 }
     
-    async loadUserData(user) {
+     async loadUserData(user) {
         try {
+            console.log('Loading user data for:', user.uid);
+            
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const userDoc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
+            console.log('Using appId:', appId);
+            
+            const userDocRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
+            
+            console.log('Document exists:', userDoc.exists);
             
             if (userDoc.exists) {
                 this.userData = userDoc.data();
                 this.userData.uid = user.uid;
                 
-                // Store in localStorage for quick access
                 localStorage.setItem('userData', JSON.stringify(this.userData));
-                console.log('User data loaded and cached:', this.userData.businessName);
-                
-                // Update UI if on app page
-                if (window.location.pathname.includes('app.html')) {
-                    this.updateUI();
-                }
+                console.log('User data loaded successfully:', this.userData.businessName);
+                return true;
             } else {
                 console.error('User document does not exist in Firestore');
                 this.userData = null;
                 localStorage.removeItem('userData');
+                return false;
             }
         } catch (error) {
             console.error('Error loading user data:', error);
+            console.error('Error code:', error.code);
+            console.error('Error message:', error.message);
+            
             this.userData = null;
             localStorage.removeItem('userData');
+            return false;
         }
     }
 
@@ -292,7 +316,7 @@ clearInputError(input) {
         }
     }
 
-    handleAuthError(error) {
+  handleAuthError(error) {
         let message = 'An error occurred. Please try again.';
         
         switch (error.code) {
@@ -313,6 +337,12 @@ clearInputError(input) {
                 break;
             case 'auth/network-request-failed':
                 message = 'Network error. Please check your internet connection.';
+                break;
+            default:
+                // Handle custom errors from our code
+                if (error.message.includes('Firestore write error') || error.message.includes('verification failed')) {
+                    message = error.message;
+                }
                 break;
         }
         
