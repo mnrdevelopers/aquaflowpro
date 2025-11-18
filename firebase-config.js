@@ -38,7 +38,7 @@ db.enablePersistence()
   });
 
 // ImgBB API Key for QR code storage
-const IMGBB_API_KEY = 'your-imgbb-api-key-here';
+const IMGBB_API_KEY = 'bbfde58b1da5fc9ee9d7d6a591852f71';
 
 // Utility functions
 const getCurrentMonth = () => {
