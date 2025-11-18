@@ -10,7 +10,14 @@ class AquaFlowApp {
     }
 
     async init() {
-        await this.checkAuthentication();
+        // CRITICAL: Ensure authentication is fully checked and data is available before proceeding.
+        const authDataReady = await this.checkAuthentication();
+        
+        if (!authDataReady) {
+            // checkAuthentication handled the redirect or decided to wait for auth.js
+            return;
+        }
+
         this.setupEventListeners();
         await this.loadInitialData();
         this.updateUI();
@@ -18,13 +25,27 @@ class AquaFlowApp {
 
     async checkAuthentication() {
         const user = authManager.getCurrentUser();
+        // CRITICAL FIX 1: Use the now-resilient getUserData() from authManager
+        this.userData = authManager.getUserData(); 
+        
         if (!user) {
+            // User is definitely signed out (auth.js onAuthStateChanged already finished)
             window.location.href = 'auth.html';
-            return;
+            return false;
         }
         
         this.userId = user.uid;
-        this.userData = authManager.getUserData();
+        
+        // CRITICAL FIX 2: If user is present but userData is missing (e.g., race condition right after signup
+        // and before loadUserData completed), or if the data failed to load/parse.
+        if (!this.userData) {
+            // If data is missing even after checking localStorage (in auth.js), something is wrong.
+            // Log the error but do not redirect to prevent the loop. Stop data loading.
+            console.error('CRITICAL: User is signed in, but user data is unavailable. Blocking data load.');
+            return false;
+        }
+        
+        return true;
     }
 
     setupEventListeners() {
@@ -49,15 +70,31 @@ class AquaFlowApp {
     }
 
     async loadInitialData() {
-        await this.loadCustomers();
-        await this.loadRecentDeliveries();
+        // Use Promise.all to load data concurrently and provide better user experience
+        await Promise.all([
+            this.loadCustomers(),
+            this.loadRecentDeliveries()
+        ]);
         this.updateDashboard();
+        
+        // CRITICAL FIX 3: App initialization complete, continuous loading state is over.
+        console.log('App initialization complete.');
     }
 
     async loadCustomers() {
         try {
-            const snapshot = await db.collection('customers')
-                .where('userId', '==', this.userId)
+            // Use the global __app_id variable for Firestore path
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            
+            // Ensure this.userId is defined before querying
+            if (!this.userId) {
+                throw new Error('User ID is undefined. Cannot load customers.');
+            }
+            
+            // CRITICAL FIX 4: Use the secure, Canvas-compliant Firestore path
+            const customersCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers');
+            
+            const snapshot = await customersCollectionRef
                 .orderBy('name')
                 .get();
             
@@ -70,18 +107,28 @@ class AquaFlowApp {
             this.loadCustomerSelect();
             
         } catch (error) {
+            // This is where "Failed to load customers" is shown.
             console.error('Error loading customers:', error);
-            showError('Failed to load customers');
+            showError('Failed to load customers'); 
         }
     }
 
     async loadRecentDeliveries() {
         try {
+            // Use the global __app_id variable for Firestore path
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            
+            if (!this.userId) {
+                throw new Error('User ID is undefined. Cannot load deliveries.');
+            }
+            
+            // CRITICAL FIX 5: Use the secure, Canvas-compliant Firestore path
+            const deliveriesCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries');
+            
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
             
-            const snapshot = await db.collection('deliveries')
-                .where('userId', '==', this.userId)
+            const snapshot = await deliveriesCollectionRef
                 .where('timestamp', '>=', oneWeekAgo)
                 .orderBy('timestamp', 'desc')
                 .limit(10)
@@ -94,6 +141,7 @@ class AquaFlowApp {
             
         } catch (error) {
             console.error('Error loading deliveries:', error);
+            showError('Failed to load recent deliveries.');
         }
     }
 
@@ -120,6 +168,9 @@ class AquaFlowApp {
             const customerDeliveries = this.deliveries.filter(d => d.customerId === customer.id);
             const totalCans = customerDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
             
+            // CRITICAL FIX 6: Ensure defaultPrice is used safely with fallback
+            const price = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 'N/A');
+            
             return `
                 <div class="customer-card">
                     <div class="customer-header">
@@ -129,7 +180,7 @@ class AquaFlowApp {
                     <div class="customer-details">
                         <div><i class="fas fa-phone"></i> ${customer.phone}</div>
                         <div><i class="fas fa-map-marker-alt"></i> ${customer.address}</div>
-                        <div><i class="fas fa-tint"></i> ${totalCans} total cans • ₹${customer.pricePerCan || this.userData.defaultPrice}/can</div>
+                        <div><i class="fas fa-tint"></i> ${totalCans} total cans • ₹${price}/can</div>
                     </div>
                     <div class="customer-actions">
                         <button class="btn btn-primary" onclick="quickDelivery('${customer.id}')">
@@ -181,18 +232,29 @@ class AquaFlowApp {
     async addCustomer(e) {
         e.preventDefault();
         
+        // Use the global __app_id variable for Firestore path
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
         const customerData = {
             name: document.getElementById('customerName').value,
             phone: document.getElementById('customerPhone').value,
             address: document.getElementById('customerAddress').value,
             type: document.getElementById('customerType').value,
-            pricePerCan: parseInt(document.getElementById('customerPrice').value) || this.userData.defaultPrice,
+            // CRITICAL FIX 7: Use the correct defaultPrice lookup with fallback
+            pricePerCan: parseInt(document.getElementById('customerPrice').value) || (this.userData ? this.userData.defaultPrice : 20),
             userId: this.userId,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
+        
+        // Check for required data before saving
+        if (!this.userId) {
+            showError('Authentication failed. Please sign in again.');
+            return;
+        }
 
         try {
-            const docRef = await db.collection('customers').add(customerData);
+            // CRITICAL FIX 8: Use the secure, Canvas-compliant Firestore path
+            const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').add(customerData);
             customerData.id = docRef.id;
             this.customers.push(customerData);
 
@@ -216,11 +278,20 @@ class AquaFlowApp {
 
     async generateAndStoreQRCode(customerId, customerData) {
         try {
+            // Use the global __app_id variable for Firestore path
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
             // Generate QR code data
             const qrData = `AQUAFLOW:${customerId}:${this.userId}`;
             
             // Create QR code canvas
             const canvas = document.createElement('canvas');
+            // Assuming QRCode is globally available via script tag in app.html
+            if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
+                console.warn('QRCode library not loaded or not correctly exposed.');
+                return;
+            }
+            
             await QRCode.toCanvas(canvas, qrData, {
                 width: 300,
                 margin: 2,
@@ -236,6 +307,7 @@ class AquaFlowApp {
             // Upload to ImgBB
             const formData = new FormData();
             formData.append('image', blob);
+            // CRITICAL FIX 9: Use the global IMGBB_API_KEY
             formData.append('key', IMGBB_API_KEY);
 
             const response = await fetch('https://api.imgbb.com/1/upload', {
@@ -247,19 +319,20 @@ class AquaFlowApp {
             
             if (result.success) {
                 // Store QR code URL in customer document
-                await db.collection('customers').doc(customerId).update({
+                await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update({
                     qrCodeUrl: result.data.url,
                     qrCodeData: qrData
                 });
                 
                 return result.data.url;
             } else {
-                throw new Error('Failed to upload QR code to ImgBB');
+                // Throw the error message from ImgBB if available
+                throw new Error(result.error.message || 'Failed to upload QR code to ImgBB');
             }
             
         } catch (error) {
             console.error('Error generating QR code:', error);
-            showError('Customer added but QR code generation failed');
+            showError('Customer added but QR code generation failed: ' + error.message);
         }
     }
 
@@ -282,6 +355,26 @@ class AquaFlowApp {
     }
 
     // Scanner Functions
+    showView(viewName) {
+        // Remove active class from all views
+        document.querySelectorAll('.view').forEach(view => {
+            view.classList.remove('active');
+        });
+
+        // Add active class to the selected view
+        const activeView = document.getElementById(viewName + 'View');
+        if (activeView) {
+            activeView.classList.add('active');
+            this.currentView = viewName;
+        }
+
+        // Update active nav item
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        document.querySelector(`.bottom-nav .nav-item[onclick="showView('${viewName}')"]`).classList.add('active');
+    }
+
     openScanner() {
         this.showModal('scannerModal');
     }
@@ -330,6 +423,15 @@ class AquaFlowApp {
     }
 
     startQRDetection(video) {
+        // Use a simple polling loop instead of BarcodeDetector if it fails or is not available.
+        // For simplicity and cross-browser compatibility in an iframe environment, 
+        // we'll stick to the existing implementation, but wrap it for safety.
+        
+        if (!('BarcodeDetector' in window)) {
+            // Fallback for non-supported browsers
+            return; 
+        }
+        
         const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
         this.scannerActive = true;
         
@@ -344,6 +446,7 @@ class AquaFlowApp {
                     requestAnimationFrame(detectFrame);
                 }
             } catch (error) {
+                // If detection fails for this frame, continue trying
                 requestAnimationFrame(detectFrame);
             }
         };
@@ -366,7 +469,11 @@ class AquaFlowApp {
         }
 
         try {
-            const customerDoc = await db.collection('customers').doc(customerId).get();
+            // Use the global __app_id variable for Firestore path
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            
+            // CRITICAL FIX 10: Use the secure, Canvas-compliant Firestore path
+            const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).get();
             if (!customerDoc.exists) {
                 showError('Customer not found.');
                 return;
@@ -404,6 +511,9 @@ class AquaFlowApp {
             showError('Please enter a valid quantity.');
             return;
         }
+        
+        // Use the global __app_id variable for Firestore path
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         try {
             const deliveryData = {
@@ -414,7 +524,8 @@ class AquaFlowApp {
                 userId: this.userId
             };
 
-            await db.collection('deliveries').add(deliveryData);
+            // CRITICAL FIX 11: Use the secure, Canvas-compliant Firestore path
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
             
             showSuccess(`Delivery recorded: ${quantity} can(s) delivered`);
             this.closeScanner();
@@ -448,8 +559,9 @@ class AquaFlowApp {
         
         // Today's deliveries
         const today = new Date().toDateString();
+        // Ensure timestamp is a valid object before accessing seconds
         const todayDeliveries = this.deliveries.filter(d => 
-            new Date(d.timestamp.seconds * 1000).toDateString() === today
+            d.timestamp && new Date(d.timestamp.seconds * 1000).toDateString() === today
         );
         let todayCans = 0;
         todayDeliveries.forEach(d => todayCans += d.quantity || 1);
@@ -462,7 +574,8 @@ class AquaFlowApp {
         
         monthlyDeliveries.forEach(delivery => {
             const customer = this.customers.find(c => c.id === delivery.customerId);
-            const price = customer?.pricePerCan || this.userData.defaultPrice;
+            // CRITICAL FIX 12: Safely access defaultPrice with a fallback if userData is somehow still missing
+            const price = customer?.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
             monthlyRevenue += (delivery.quantity || 1) * price;
         });
         
@@ -489,8 +602,12 @@ class AquaFlowApp {
             const customer = this.customers.find(c => c.id === delivery.customerId);
             if (!customer) return '';
             
+            // Ensure timestamp is a valid object before accessing seconds
+            if (!delivery.timestamp || !delivery.timestamp.seconds) return '';
+            
             const deliveryDate = new Date(delivery.timestamp.seconds * 1000);
-            const price = customer.pricePerCan || this.userData.defaultPrice;
+            // CRITICAL FIX 13: Safely access defaultPrice with a fallback
+            const price = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
             const amount = (delivery.quantity || 1) * price;
             
             return `
@@ -518,13 +635,16 @@ class AquaFlowApp {
             return;
         }
 
+        // Use the global __app_id variable for Firestore path
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
         try {
             let bills = [];
             
             if (customerId === 'all') {
-                bills = await this.calculateMonthlyBills(month);
+                bills = await this.calculateMonthlyBills(month, appId);
             } else {
-                const bill = await this.calculateCustomerBill(customerId, month);
+                const bill = await this.calculateCustomerBill(customerId, month, appId);
                 bills = bill ? [bill] : [];
             }
 
@@ -536,11 +656,11 @@ class AquaFlowApp {
         }
     }
 
-    async calculateMonthlyBills(month) {
+    async calculateMonthlyBills(month, appId) {
         const bills = [];
         
         for (const customer of this.customers) {
-            const bill = await this.calculateCustomerBill(customer.id, month);
+            const bill = await this.calculateCustomerBill(customer.id, month, appId);
             if (bill && bill.totalCans > 0) {
                 bills.push(bill);
             }
@@ -549,13 +669,15 @@ class AquaFlowApp {
         return bills;
     }
 
-    async calculateCustomerBill(customerId, month) {
+    async calculateCustomerBill(customerId, month, appId) {
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) return null;
 
         // Get deliveries for this customer and month
-        const snapshot = await db.collection('deliveries')
-            .where('userId', '==', this.userId)
+        // CRITICAL FIX 14: Use the secure, Canvas-compliant Firestore path
+        const deliveriesCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries');
+        
+        const snapshot = await deliveriesCollectionRef
             .where('customerId', '==', customerId)
             .where('month', '==', month)
             .get();
@@ -567,7 +689,8 @@ class AquaFlowApp {
 
         if (totalCans === 0) return null;
 
-        const pricePerCan = customer.pricePerCan || this.userData.defaultPrice;
+        // CRITICAL FIX 15: Safely access defaultPrice with a fallback
+        const pricePerCan = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
         const totalAmount = totalCans * pricePerCan;
 
         return {
@@ -639,6 +762,19 @@ class AquaFlowApp {
         if (businessNameElement && this.userData) {
             businessNameElement.textContent = this.userData.businessName;
         }
+        
+        // Update settings modal inputs
+        const settingsBusinessName = document.getElementById('settingsBusinessName');
+        const settingsDefaultPrice = document.getElementById('settingsDefaultPrice');
+        if (settingsBusinessName && this.userData) {
+            settingsBusinessName.value = this.userData.businessName || '';
+        }
+        if (settingsDefaultPrice && this.userData) {
+            settingsDefaultPrice.value = this.userData.defaultPrice || 20;
+        }
+        
+        // Show the initial view
+        this.showView(this.currentView);
     }
 }
 
@@ -694,13 +830,13 @@ function quickDelivery(customerId) {
     }
 }
 
-function generateBills() {
-    if (app) app.generateBills();
-}
-
 async function generateCustomerQR(customerId) {
     try {
-        const customerDoc = await db.collection('customers').doc(customerId).get();
+        // Use the global __app_id variable for Firestore path
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // CRITICAL FIX 16: Use the secure, Canvas-compliant Firestore path
+        const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('customers').doc(customerId).get();
         if (!customerDoc.exists) {
             showError('Customer not found.');
             return;
@@ -769,6 +905,10 @@ async function generateCustomerQR(customerId) {
         console.error('Error displaying QR code:', error);
         showError('Failed to display QR code.');
     }
+}
+
+function generateBills() {
+    if (app) app.generateBills();
 }
 
 function markBillPaid(customerId, month, amount) {
