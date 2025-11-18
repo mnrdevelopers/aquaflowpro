@@ -402,7 +402,7 @@ textarea.form-input {
     display: block;
 }
 
-/* Auth Page Input Fields */
+/* Auth Page Input Fields - FIXED PASSWORD EYE BUTTON */
 .auth-form .input-group {
     position: relative;
     margin-bottom: var(--space-lg);
@@ -439,6 +439,7 @@ textarea.form-input {
     color: var(--primary);
 }
 
+/* FIXED: Password eye button positioning */
 .auth-form .input-group .btn-eye {
     position: absolute;
     right: var(--space-md);
@@ -450,7 +451,9 @@ textarea.form-input {
     cursor: pointer;
     padding: var(--space-sm);
     border-radius: var(--radius-sm);
-    z-index: 2;
+    z-index: 3; /* Increased z-index to ensure it's above input */
+    width: auto;
+    height: auto;
 }
 
 .auth-form .input-group .btn-eye:hover {
@@ -1379,4 +1382,212 @@ textarea.form-input {
     font-size: 0.8rem;
     color: var(--gray-500);
     margin-top: 1rem;
+}
+
+/* Notifications Styles */
+.notifications-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border-left: 4px solid var(--gray-300);
+    transition: all 0.3s ease;
+}
+
+.notification-item.unread {
+    border-left-color: var(--primary);
+    background: var(--light);
+}
+
+.notification-item:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.notification-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.notification-icon.info {
+    background: var(--info);
+}
+
+.notification-icon.success {
+    background: var(--success);
+}
+
+.notification-icon.warning {
+    background: var(--warning);
+}
+
+.notification-icon.error {
+    background: var(--danger);
+}
+
+.notification-icon.delivery {
+    background: var(--primary);
+}
+
+.notification-icon.payment {
+    background: var(--success);
+}
+
+.notification-content {
+    flex: 1;
+}
+
+.notification-content h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: var(--space-xs);
+}
+
+.notification-content p {
+    font-size: 0.9rem;
+    color: var(--gray-600);
+    margin-bottom: var(--space-xs);
+}
+
+.notification-time {
+    font-size: 0.8rem;
+    color: var(--gray-500);
+}
+
+.notification-actions {
+    display: flex;
+    gap: var(--space-xs);
+    flex-shrink: 0;
+}
+
+/* Customer Details Modal Styles */
+.customer-details-content {
+    padding: var(--space-lg);
+}
+
+.detail-section {
+    margin-bottom: var(--space-xl);
+}
+
+.detail-section h4 {
+    margin-bottom: var(--space-lg);
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--gray-300);
+    color: var(--gray-800);
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md) 0;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+}
+
+.detail-item label {
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 0;
+}
+
+.detail-item span {
+    color: var(--gray-600);
+    text-align: right;
+}
+
+/* Delete Confirmation Modal */
+.modal-body {
+    padding: var(--space-lg);
+}
+
+.modal-body p {
+    margin-bottom: var(--space-md);
+    color: var(--gray-700);
+}
+
+.modal-body strong {
+    color: var(--danger);
+    font-size: 1.1rem;
+}
+
+/* Enhanced Customer Actions */
+.customer-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+}
+
+.customer-actions .btn {
+    padding: var(--space-sm);
+    font-size: 0.8rem;
+}
+
+/* Responsive adjustments for customer actions */
+@media (max-width: 480px) {
+    .customer-actions {
+        grid-template-columns: 1fr;
+    }
+    
+    .notification-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .notification-actions {
+        align-self: flex-end;
+        margin-top: var(--space-md);
+    }
+}
+
+/* Loading animation for notifications */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.notification-item.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Empty state for notifications */
+.empty-state {
+    text-align: center;
+    padding: var(--space-2xl);
+    color: var(--gray-500);
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: var(--space-md);
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    margin-bottom: var(--space-sm);
+    color: var(--gray-600);
+}
+
+.empty-state p {
+    margin-bottom: var(--space-lg);
 }
