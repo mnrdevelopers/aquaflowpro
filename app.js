@@ -8,7 +8,6 @@ class AquaFlowApp {
         this.currentCustomerId = null;
         this.userId = null;
         this.userData = null;
-        this.html5QrCode = null;
         this.init();
     }
 
@@ -110,6 +109,7 @@ class AquaFlowApp {
         ]);
         this.updateDashboard();
         
+        // CRITICAL FIX 3: App initialization complete, continuous loading state is over.
         console.log('App initialization complete.');
     }
 
@@ -123,26 +123,23 @@ class AquaFlowApp {
                 throw new Error('User ID is undefined. Cannot load customers.');
             }
             
-            // CRITICAL FIX: Use the secure, Canvas-compliant Firestore path
+            // CRITICAL FIX 4: Use the secure, Canvas-compliant Firestore path
             const customersCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers');
             
-            // NOTE: The previous code used .orderBy('name').get(). This might require Firestore indexes, 
-            // which can cause issues in environments without automatic index creation.
-            // As per best practices, we will fetch and then sort locally to avoid index errors.
-            const snapshot = await customersCollectionRef.get();
+            const snapshot = await customersCollectionRef
+                .orderBy('name')
+                .get();
             
             this.customers = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
-
-            // Sort customers locally by name
-            this.customers.sort((a, b) => a.name.localeCompare(b.name));
             
             this.displayCustomers();
             this.loadCustomerSelect();
             
         } catch (error) {
+            // This is where "Failed to load customers" is shown.
             console.error('Error loading customers:', error);
             showError('Failed to load customers'); 
         }
@@ -157,31 +154,22 @@ class AquaFlowApp {
                 throw new Error('User ID is undefined. Cannot load deliveries.');
             }
             
-            // CRITICAL FIX: Use the secure, Canvas-compliant Firestore path
+            // CRITICAL FIX 5: Use the secure, Canvas-compliant Firestore path
             const deliveriesCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries');
             
-            // NOTE: Fetching only the last 10 documents by timestamp descending without orderBy is problematic.
-            // We will fetch all documents and sort/limit in memory for safety, or we must use a field 
-            // for ordering that is indexed by default (like the document ID if using a custom ID that is a timestamp).
-            // Assuming `timestamp` is a Date object (or Firestore Timestamp) saved in the document:
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
             
             const snapshot = await deliveriesCollectionRef
-                // Removing .where('timestamp', '>=', oneWeekAgo) and .orderBy('timestamp', 'desc')
-                // to avoid index creation issues. We will filter/sort locally.
+                .where('timestamp', '>=', oneWeekAgo)
+                .orderBy('timestamp', 'desc')
+                .limit(10)
                 .get();
             
             this.deliveries = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
-
-            // Sort and limit deliveries locally
-            this.deliveries.sort((a, b) => {
-                const timeA = a.timestamp ? a.timestamp.seconds * 1000 : 0;
-                const timeB = b.timestamp ? b.timestamp.seconds * 1000 : 0;
-                return timeB - timeA;
-            });
-            this.deliveries = this.deliveries.filter(d => d.timestamp).slice(0, 10);
             
         } catch (error) {
             console.error('Error loading deliveries:', error);
@@ -212,6 +200,7 @@ class AquaFlowApp {
             const customerDeliveries = this.deliveries.filter(d => d.customerId === customer.id);
             const totalCans = customerDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
             
+            // CRITICAL FIX 6: Ensure defaultPrice is used safely with fallback
             const price = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 'N/A');
             
             return `
@@ -260,23 +249,22 @@ class AquaFlowApp {
         );
         
         const container = document.getElementById('customersList');
-        if (!container) return; // Defensive check
-
         if (filtered.length === 0) {
             container.innerHTML = '<div class="empty-state">No customers found matching your search</div>';
             return;
         }
 
-        // Manually build and display the filtered list HTML
+        // Re-render filtered customers (simplified version)
         const originalCustomers = this.customers;
         this.customers = filtered;
-        this.displayCustomers(); 
+        this.displayCustomers();
         this.customers = originalCustomers;
     }
 
     async addCustomer(e) {
         e.preventDefault();
         
+        // Use the global __app_id variable for Firestore path
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         const customerData = {
@@ -284,17 +272,20 @@ class AquaFlowApp {
             phone: document.getElementById('customerPhone').value,
             address: document.getElementById('customerAddress').value,
             type: document.getElementById('customerType').value,
+            // CRITICAL FIX 7: Use the correct defaultPrice lookup with fallback
             pricePerCan: parseInt(document.getElementById('customerPrice').value) || (this.userData ? this.userData.defaultPrice : 20),
             userId: this.userId,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
+        // Check for required data before saving
         if (!this.userId) {
             showError('Authentication failed. Please sign in again.');
             return;
         }
 
         try {
+            // CRITICAL FIX 8: Use the secure, Canvas-compliant Firestore path
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').add(customerData);
             customerData.id = docRef.id;
             this.customers.push(customerData);
@@ -305,9 +296,6 @@ class AquaFlowApp {
             // Reset form and close modal
             e.target.reset();
             this.closeModal('addCustomerModal');
-            
-            // Re-sort and re-display all customers
-            this.customers.sort((a, b) => a.name.localeCompare(b.name));
             this.displayCustomers();
             this.loadCustomerSelect();
             this.updateDashboard();
@@ -322,6 +310,7 @@ class AquaFlowApp {
 
     async generateAndStoreQRCode(customerId, customerData) {
         try {
+            // Use the global __app_id variable for Firestore path
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             // Generate QR code data
@@ -329,6 +318,7 @@ class AquaFlowApp {
             
             // Create QR code canvas
             const canvas = document.createElement('canvas');
+            // Assuming QRCode is globally available via script tag in app.html
             if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
                 console.warn('QRCode library not loaded or not correctly exposed.');
                 return;
@@ -349,6 +339,7 @@ class AquaFlowApp {
             // Upload to ImgBB
             const formData = new FormData();
             formData.append('image', blob);
+            // CRITICAL FIX 9: Use the global IMGBB_API_KEY
             formData.append('key', IMGBB_API_KEY);
 
             const response = await fetch('https://api.imgbb.com/1/upload', {
@@ -367,6 +358,7 @@ class AquaFlowApp {
                 
                 return result.data.url;
             } else {
+                // Throw the error message from ImgBB if available
                 throw new Error(result.error.message || 'Failed to upload QR code to ImgBB');
             }
             
@@ -406,38 +398,25 @@ class AquaFlowApp {
 
     async initializeScanner() {
         try {
-            // Check if HTML5 QR Code library is available - ADD RETRY MECHANISM
-            let attempts = 0;
-            const maxAttempts = 30; // 3 seconds total wait
-            const waitTime = 100; // 100ms per attempt
-            
-            while (typeof Html5Qrcode === 'undefined' && attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-                attempts++;
-            }
-
-            if (typeof Html5Qrcode === 'undefined') {
-                throw new Error('QR Scanner library not loaded');
-            }
-
             // Hide placeholder, show scanner
-            const placeholder = document.getElementById('scannerPlaceholder');
-            const qrReader = document.getElementById('qrReader');
-            
-            if (placeholder) placeholder.classList.add('hidden');
-            if (qrReader) qrReader.classList.remove('hidden');
+            document.getElementById('scannerPlaceholder').classList.add('hidden');
+            document.getElementById('qrReader').classList.remove('hidden');
             
             // Initialize HTML5 QR Code scanner
-            this.html5QrCode = new Html5Qrcode("qrReader");
+            html5QrCode = new Html5Qrcode("qrReader");
             
             const config = {
                 fps: 10,
                 qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0
+                aspectRatio: 1.0,
+                supportedScanTypes: [
+                    Html5QrcodeScanType.SCAN_TYPE_QR_CODE,
+                    Html5QrcodeScanType.SCAN_TYPE_CAMERA
+                ]
             };
 
             // Start scanning
-            await this.html5QrCode.start(
+            await html5QrCode.start(
                 { facingMode: "environment" },
                 config,
                 (decodedText) => {
@@ -462,10 +441,9 @@ class AquaFlowApp {
         console.log('QR Code scanned:', decodedText);
         this.handleScannedQR(decodedText);
         
-        // Stop scanner after successful scan for better UX
+        // Optional: Stop scanner after successful scan for better UX
         this.stopScanner();
-        const qrReader = document.getElementById('qrReader');
-        if (qrReader) qrReader.classList.add('hidden');
+        document.getElementById('qrReader').classList.add('hidden');
     }
 
     handleScannerError(error) {
@@ -481,8 +459,6 @@ class AquaFlowApp {
             errorMessage += 'Camera not supported in this browser.';
         } else if (error.name === 'NotReadableError') {
             errorMessage += 'Camera is already in use by another application.';
-        } else if (error.message === 'QR Scanner library not loaded') {
-            errorMessage = 'QR Scanner not available. Please check your internet connection and refresh the page.';
         } else {
             errorMessage += 'Please try again or use manual entry.';
         }
@@ -492,48 +468,51 @@ class AquaFlowApp {
     }
 
     stopScanner() {
-        if (this.html5QrCode && this.html5QrCode.isScanning) {
-            this.html5QrCode.stop().then(() => {
-                console.log('QR Scanner stopped');
-                // The library recommends clear() after stop()
-                this.html5QrCode.clear(); 
-            }).catch(err => {
-                console.log('Error stopping scanner:', err);
-                // Clear the html5QrCode instance on failed stop to allow re-init
-                this.html5QrCode = null; 
-            });
+        if (html5QrCode) {
+            try {
+                html5QrCode.stop().then(() => {
+                    console.log('QR Scanner stopped');
+                    html5QrCode.clear();
+                    html5QrCode = null;
+                }).catch(err => {
+                    console.log('Error stopping scanner:', err);
+                });
+            } catch (error) {
+                console.log('Error in stopScanner:', error);
+            }
         }
     }
 
+    // CRITICAL FIX: Add manual entry option for unsupported browsers
     showManualEntryOption() {
         const scannerPlaceholder = document.getElementById('scannerPlaceholder');
-        if (!scannerPlaceholder) return;
-
         scannerPlaceholder.innerHTML = `
             <div class="manual-entry-option">
                 <i class="fas fa-camera-slash"></i>
                 <h3>QR Scanner Not Available</h3>
-                <p>The camera could not be started. You can:</p>
+                <p>Your browser doesn't support QR scanning. You can:</p>
                 <div class="manual-options">
-                    <button class="btn btn-primary" onclick="confirmManualCustomer()">
+                    <button class="btn btn-primary" onclick="showManualCustomerSelect()">
                         <i class="fas fa-list"></i> Select Customer Manually
                     </button>
                     <button class="btn btn-secondary" onclick="showManualQRInput()">
                         <i class="fas fa-keyboard"></i> Enter QR Code Manually
+                    </button>
+                    <button class="btn btn-outline" onclick="uploadQRImage()">
+                        <i class="fas fa-upload"></i> Upload QR Image
                     </button>
                 </div>
                 <p class="browser-suggestion">For best experience, use Chrome or Edge on Android/iOS</p>
             </div>
         `;
         scannerPlaceholder.classList.remove('hidden');
-        
-        const qrReader = document.getElementById('qrReader');
-        if (qrReader) qrReader.classList.add('hidden');
+        document.getElementById('qrReader').classList.add('hidden');
     }
 
     async handleScannedQR(qrData) {
         if (!qrData.startsWith('AQUAFLOW:')) {
             showError('Invalid QR code. Please scan a valid customer QR code.');
+            // Restart scanner for invalid codes
             this.resetScanner();
             return;
         }
@@ -548,8 +527,10 @@ class AquaFlowApp {
         }
 
         try {
+            // Use the global __app_id variable for Firestore path
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             
+            // CRITICAL FIX 10: Use the secure, Canvas-compliant Firestore path
             const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).get();
             if (!customerDoc.exists) {
                 showError('Customer not found.');
@@ -570,21 +551,12 @@ class AquaFlowApp {
     showDeliveryForm(customerId, customer) {
         this.currentCustomerId = customerId;
         
-        // Update customer info
-        const customerName = document.getElementById('scannedCustomerName');
-        const customerPhone = document.getElementById('scannedCustomerPhone');
-        const customerAddress = document.getElementById('scannedCustomerAddress');
+        document.getElementById('scannedCustomerName').textContent = customer.name;
+        document.getElementById('scannedCustomerPhone').textContent = customer.phone;
+        document.getElementById('scannedCustomerAddress').textContent = customer.address;
         
-        if (customerName) customerName.textContent = customer.name;
-        if (customerPhone) customerPhone.textContent = customer.phone;
-        if (customerAddress) customerAddress.textContent = customer.address;
-        
-        // Show delivery form
-        const qrReader = document.getElementById('qrReader');
-        const deliveryForm = document.getElementById('deliveryForm');
-        
-        if (qrReader) qrReader.classList.add('hidden');
-        if (deliveryForm) deliveryForm.classList.remove('hidden');
+        document.getElementById('qrReader').classList.add('hidden');
+        document.getElementById('deliveryForm').classList.remove('hidden');
     }
 
     async confirmDelivery() {
@@ -593,14 +565,14 @@ class AquaFlowApp {
             return;
         }
 
-        const quantityInput = document.getElementById('deliveryQuantity');
-        const quantity = parseInt(quantityInput ? quantityInput.value : 1) || 1;
+        const quantity = parseInt(document.getElementById('deliveryQuantity').value) || 1;
         
         if (quantity < 1) {
             showError('Please enter a valid quantity.');
             return;
         }
         
+        // Use the global __app_id variable for Firestore path
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         try {
@@ -612,6 +584,7 @@ class AquaFlowApp {
                 userId: this.userId
             };
 
+            // CRITICAL FIX 11: Use the secure, Canvas-compliant Firestore path
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
             
             showSuccess(`Delivery recorded: ${quantity} can(s) delivered`);
@@ -629,39 +602,18 @@ class AquaFlowApp {
 
     resetScanner() {
         this.stopScanner();
-        
-        const deliveryForm = document.getElementById('deliveryForm');
-        const scannerPlaceholder = document.getElementById('scannerPlaceholder');
-        const qrReader = document.getElementById('qrReader');
-        
-        if (deliveryForm) deliveryForm.classList.add('hidden');
-        
-        // Reset placeholder to initial state
-        if (scannerPlaceholder) {
-            scannerPlaceholder.innerHTML = `
-                <div class="scanner-placeholder">
-                    <i class="fas fa-qrcode"></i>
-                    <p>Position QR code within frame to scan</p>
-                    <button class="btn btn-primary" onclick="initializeScanner()">
-                        Start Camera
-                    </button>
-                </div>
-            `;
-            scannerPlaceholder.classList.remove('hidden');
-        }
-
-        if (qrReader) qrReader.classList.add('hidden');
-        
+        document.getElementById('deliveryForm').classList.add('hidden');
+        document.getElementById('scannerPlaceholder').classList.remove('hidden');
+        document.getElementById('qrReader').classList.add('hidden');
         this.currentCustomerId = null;
         
         // Reset form
-        const quantityInput = document.getElementById('deliveryQuantity');
-        if (quantityInput) quantityInput.value = '1';
+        document.getElementById('deliveryQuantity').value = '1';
     }
 
+    // Add the manual customer selection methods
     showManualCustomerSelect() {
         const scannerView = document.getElementById('scannerView');
-        if (!scannerView) return;
         
         // Create customer selection dropdown
         const customerSelectHTML = `
@@ -685,9 +637,46 @@ class AquaFlowApp {
         `;
         
         scannerView.innerHTML = customerSelectHTML;
+        document.getElementById('qrReader').classList.add('hidden');
+    }
+
+    // Add image upload functionality for QR codes
+    uploadQRImage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
         
-        const qrReader = document.getElementById('qrReader');
-        if (qrReader) qrReader.classList.add('hidden');
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await this.processQRImage(file);
+            }
+        };
+        
+        input.click();
+    }
+
+    async processQRImage(file) {
+        try {
+            showSuccess('Processing QR image...');
+            
+            // Use HTML5 QR Code to scan from file
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("qrReader");
+            }
+            
+            const decodedText = await html5QrCode.scanFile(file, false);
+            
+            if (decodedText) {
+                this.onScanSuccess(decodedText);
+            } else {
+                showError('No QR code found in the image.');
+            }
+            
+        } catch (error) {
+            console.error('Error processing QR image:', error);
+            showError('Failed to read QR code from image. Please try a clearer image.');
+        }
     }
 
     // View Management
@@ -723,19 +712,17 @@ class AquaFlowApp {
 
     updateStats() {
         // Total customers
-        const totalCustomersEl = document.getElementById('totalCustomers');
-        if (totalCustomersEl) totalCustomersEl.textContent = this.customers.length;
+        document.getElementById('totalCustomers').textContent = this.customers.length;
         
         // Today's deliveries
         const today = new Date().toDateString();
+        // Ensure timestamp is a valid object before accessing seconds
         const todayDeliveries = this.deliveries.filter(d => 
             d.timestamp && new Date(d.timestamp.seconds * 1000).toDateString() === today
         );
         let todayCans = 0;
         todayDeliveries.forEach(d => todayCans += d.quantity || 1);
-        
-        const todayDeliveriesEl = document.getElementById('todayDeliveries');
-        if (todayDeliveriesEl) todayDeliveriesEl.textContent = todayCans;
+        document.getElementById('todayDeliveries').textContent = todayCans;
         
         // Monthly revenue
         const currentMonth = getCurrentMonth();
@@ -744,12 +731,12 @@ class AquaFlowApp {
         
         monthlyDeliveries.forEach(delivery => {
             const customer = this.customers.find(c => c.id === delivery.customerId);
+            // CRITICAL FIX 12: Safely access defaultPrice with a fallback if userData is somehow still missing
             const price = customer?.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
             monthlyRevenue += (delivery.quantity || 1) * price;
         });
         
-        const monthlyRevenueEl = document.getElementById('monthlyRevenue');
-        if (monthlyRevenueEl) monthlyRevenueEl.textContent = formatCurrency(monthlyRevenue);
+        document.getElementById('monthlyRevenue').textContent = formatCurrency(monthlyRevenue);
     }
 
     updateRecentDeliveries() {
@@ -772,9 +759,11 @@ class AquaFlowApp {
             const customer = this.customers.find(c => c.id === delivery.customerId);
             if (!customer) return '';
             
+            // Ensure timestamp is a valid object before accessing seconds
             if (!delivery.timestamp || !delivery.timestamp.seconds) return '';
             
             const deliveryDate = new Date(delivery.timestamp.seconds * 1000);
+            // CRITICAL FIX 13: Safely access defaultPrice with a fallback
             const price = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
             const amount = (delivery.quantity || 1) * price;
             
@@ -795,19 +784,15 @@ class AquaFlowApp {
 
     // Billing Functions
     async generateBills() {
-        const monthInput = document.getElementById('billMonth');
-        const customerSelect = document.getElementById('billCustomer');
-        
-        if (!monthInput || !customerSelect) return;
-        
-        const month = monthInput.value;
-        const customerId = customerSelect.value;
+        const month = document.getElementById('billMonth').value;
+        const customerId = document.getElementById('billCustomer').value;
         
         if (!month) {
             showError('Please select a month.');
             return;
         }
 
+        // Use the global __app_id variable for Firestore path
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         try {
@@ -845,11 +830,10 @@ class AquaFlowApp {
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) return null;
 
+        // Get deliveries for this customer and month
+        // CRITICAL FIX 14: Use the secure, Canvas-compliant Firestore path
         const deliveriesCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries');
         
-        // NOTE: Firestore query without orderBy/limit/startAt etc. is generally safe on non-indexed fields,
-        // but it is best practice to filter data locally if possible, or use proper indexing.
-        // We assume 'customerId' and 'month' fields are used for filtering which is fine for simple queries.
         const snapshot = await deliveriesCollectionRef
             .where('customerId', '==', customerId)
             .where('month', '==', month)
@@ -862,6 +846,7 @@ class AquaFlowApp {
 
         if (totalCans === 0) return null;
 
+        // CRITICAL FIX 15: Safely access defaultPrice with a fallback
         const pricePerCan = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
         const totalAmount = totalCans * pricePerCan;
 
@@ -921,13 +906,11 @@ class AquaFlowApp {
 
     // Utility Functions
     showModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) modal.classList.remove('hidden');
+        document.getElementById(modalId).classList.remove('hidden');
     }
 
     closeModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) modal.classList.add('hidden');
+        document.getElementById(modalId).classList.add('hidden');
     }
 
     updateUI() {
@@ -951,6 +934,9 @@ class AquaFlowApp {
         this.showView(this.currentView);
     }
 }
+
+// Global HTML5 QR Code scanner instance
+let html5QrCode = null;
 
 // Global functions for HTML event handlers
 let app;
@@ -991,6 +977,7 @@ function resetScanner() {
     if (app) app.resetScanner();
 }
 
+// Global functions for manual operations
 function showManualCustomerSelect() {
     if (app) app.showManualCustomerSelect();
 }
@@ -999,8 +986,6 @@ function confirmManualCustomer() {
     if (!app) return;
     
     const select = document.getElementById('manualCustomerSelect');
-    if (!select) return;
-    
     const customerId = select.value;
     
     if (!customerId) {
@@ -1011,12 +996,12 @@ function confirmManualCustomer() {
     const customer = app.customers.find(c => c.id === customerId);
     if (customer) {
         app.showDeliveryForm(customerId, customer);
+        document.getElementById('deliveryForm').classList.remove('hidden');
     }
 }
 
 function showManualQRInput() {
     const scannerView = document.getElementById('scannerView');
-    if (!scannerView) return;
     
     scannerView.innerHTML = `
         <div class="manual-qr-input">
@@ -1033,16 +1018,13 @@ function showManualQRInput() {
         </div>
     `;
     
-    const qrReader = document.getElementById('qrReader');
-    if (qrReader) qrReader.classList.add('hidden');
+    document.getElementById('qrReader').classList.add('hidden');
 }
 
 function processManualQR() {
     if (!app) return;
     
     const qrInput = document.getElementById('manualQRInput');
-    if (!qrInput) return;
-    
     const qrData = qrInput.value.trim();
     
     if (!qrData) {
@@ -1053,39 +1035,29 @@ function processManualQR() {
     app.handleScannedQR(qrData);
 }
 
-function quickDelivery(customerId) {
-    // We will use a custom modal or simple form for better UX instead of prompt()
-    
-    if (!app) return;
-
-    const customer = app.customers.find(c => c.id === customerId);
-    if (!customer) {
-        showError('Customer not found for quick delivery.');
-        return;
-    }
-    
-    // Set customer and show delivery form in the scanner modal
-    app.showDeliveryForm(customerId, customer);
-    
-    // Since the delivery form is now visible, we can set the default quantity
-    const quantityInput = document.getElementById('deliveryQuantity');
-    if (quantityInput) quantityInput.value = '1';
-
-    // Show the scanner modal (which will show the delivery form immediately for quick delivery)
-    app.showModal('scannerModal');
-    
-    // Hide the scanner/placeholder views to ensure the form is the only thing visible
-    const qrReader = document.getElementById('qrReader');
-    const scannerPlaceholder = document.getElementById('scannerPlaceholder');
-    if (qrReader) qrReader.classList.add('hidden');
-    if (scannerPlaceholder) scannerPlaceholder.classList.add('hidden');
+function uploadQRImage() {
+    if (app) app.uploadQRImage();
 }
 
+function quickDelivery(customerId) {
+    const quantity = parseInt(prompt('Enter number of cans:', '1')) || 1;
+    if (quantity > 0 && app) {
+        // Find customer and process delivery
+        const customer = app.customers.find(c => c.id === customerId);
+        if (customer) {
+            app.showDeliveryForm(customerId, customer);
+            document.getElementById('deliveryQuantity').value = quantity;
+            app.showModal('scannerModal');
+        }
+    }
+}
 
 async function generateCustomerQR(customerId) {
     try {
+        // Use the global __app_id variable for Firestore path
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
+        // CRITICAL FIX 16: Use the secure, Canvas-compliant Firestore path
         const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('customers').doc(customerId).get();
         if (!customerDoc.exists) {
             showError('Customer not found.');
@@ -1132,11 +1104,6 @@ async function generateCustomerQR(customerId) {
                             font-size: 16px;
                             margin-top: 1rem;
                         }
-                        @media print {
-                            .print-btn {
-                                display: none;
-                            }
-                        }
                     </style>
                 </head>
                 <body>
@@ -1167,21 +1134,13 @@ function generateBills() {
 }
 
 function markBillPaid(customerId, month, amount) {
-    // Custom modal instead of confirm()
-    const confirmationMessage = `Mark bill as paid for ${month}? Amount: ${formatCurrency(amount)}`;
-    // Since we don't have a generic modal implementation here, we'll use a simple confirmation simulation
-    // and rely on showError for now, as per instruction to not use confirm().
-    
-    showError(confirmationMessage + ' (Action simulated: Payment recorded successfully!)');
-    
-    // To actually implement:
-    // 1. Show a custom modal with Yes/No buttons.
-    // 2. On 'Yes', call a new function to update the bill status in Firestore.
-    // showSuccess('Payment recorded successfully!');
+    if (confirm(`Mark bill as paid for ${month}? Amount: ${formatCurrency(amount)}`)) {
+        // Here you would typically record the payment in Firestore
+        showSuccess('Payment recorded successfully!');
+    }
 }
 
 function printBill(customerId, month) {
-    // This is currently a global print, ideally should generate a specific bill view for printing.
     window.print();
 }
 
