@@ -28,7 +28,7 @@ class AquaFlowApp {
         console.log('App initialization completed successfully');
     }
 
-       async waitForAuthState() {
+    async waitForAuthState() {
         let attempts = 0;
         const maxAttempts = 50; // 5 seconds max wait
         
@@ -42,7 +42,7 @@ class AquaFlowApp {
         }
     }
 
-  async checkAuthentication() {
+    async checkAuthentication() {
         const user = authManager.getCurrentUser();
         this.userData = authManager.getUserData(); 
         
@@ -414,7 +414,7 @@ class AquaFlowApp {
         this.stopScanner();
     }
 
-     async initializeScanner() {
+    async initializeScanner() {
         // CRITICAL FIX: Better browser compatibility check
         if (typeof BarcodeDetector === 'undefined') {
             console.warn('BarcodeDetector not supported, showing manual entry option');
@@ -513,7 +513,7 @@ class AquaFlowApp {
         detectFrame();
     }
 
-     // CRITICAL FIX: Add manual customer selection
+    // CRITICAL FIX: Add manual customer selection
     showManualCustomerSelect() {
         const deliveryForm = document.getElementById('deliveryForm');
         const scannerView = document.getElementById('scannerView');
@@ -542,8 +542,7 @@ class AquaFlowApp {
         scannerView.innerHTML = customerSelectHTML;
         document.getElementById('qrScanner').classList.add('hidden');
     }
-}
-    
+
     async handleScannedQR(qrData) {
         if (!qrData.startsWith('AQUAFLOW:')) {
             showError('Invalid QR code. Please scan a valid customer QR code.');
@@ -965,7 +964,6 @@ function processManualQR() {
     app.handleScannedQR(qrData);
 }
 
-
 function quickDelivery(customerId) {
     const quantity = parseInt(prompt('Enter number of cans:', '1')) || 1;
     if (quantity > 0 && app) {
@@ -1088,14 +1086,16 @@ function showSettings() {
 }
 
 // Alternative QR scanning with jsQR
-async startQRDetectionWithJSQR(video) {
-    this.scannerActive = true;
+async function startQRDetectionWithJSQR(video) {
+    if (!app) return;
+    
+    app.scannerActive = true;
     
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     
     const detectFrame = () => {
-        if (!this.scannerActive) return;
+        if (!app.scannerActive) return;
         
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
             canvas.width = video.videoWidth;
@@ -1106,7 +1106,7 @@ async startQRDetectionWithJSQR(video) {
             const code = jsQR(imageData.data, imageData.width, imageData.height);
             
             if (code) {
-                this.handleScannedQR(code.data);
+                app.handleScannedQR(code.data);
             }
         }
         
