@@ -22,7 +22,7 @@ try {
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-// Enable offline persistence
+// Enable offline persistence with better error handling
 db.enablePersistence()
   .catch((err) => {
       console.log('Firebase persistence error:', err);
@@ -48,15 +48,61 @@ const formatCurrency = (amount) => {
 };
 
 const showError = (message) => {
-    console.error(message);
-    // You can implement a toast notification system here
-    alert(message);
+    console.error('Error:', message);
+    // Create a simple notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #dc3545;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-weight: 600;
+        max-width: 300px;
+        text-align: center;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 4000);
 };
 
 const showSuccess = (message) => {
-    console.log(message);
-    // You can implement a toast notification system here
-    alert(message);
+    console.log('Success:', message);
+    // Create a simple notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #28a745;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-weight: 600;
+        max-width: 300px;
+        text-align: center;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 4000);
 };
 
 // Network status monitoring
