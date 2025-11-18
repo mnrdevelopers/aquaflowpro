@@ -195,6 +195,23 @@
                 </div>
             </div>
         </section>
+
+        <!-- Notifications View -->
+        <section id="notificationsView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Notifications</h2>
+                <button class="btn btn-secondary" onclick="clearAllNotifications()">
+                    <i class="fas fa-trash"></i> Clear All
+                </button>
+            </div>
+
+            <div id="notificationsList" class="notifications-list">
+                <!-- Notifications will be loaded here -->
+            </div>
+        </section>
     </main>
 
     <!-- Add Customer Modal -->
@@ -244,6 +261,141 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Edit Customer Modal -->
+    <div id="editCustomerModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Customer</h3>
+                <button class="btn btn-close" onclick="closeModal('editCustomerModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editCustomerForm" onsubmit="updateCustomer(event)">
+                <input type="hidden" id="editCustomerId">
+                <div class="form-group">
+                    <label for="editCustomerName">Full Name *</label>
+                    <input type="text" id="editCustomerName" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="editCustomerPhone">Phone Number *</label>
+                    <input type="tel" id="editCustomerPhone" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="editCustomerAddress">Delivery Address *</label>
+                    <textarea id="editCustomerAddress" class="form-input" rows="3" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editCustomerType">Customer Type</label>
+                        <select id="editCustomerType" class="form-input">
+                            <option value="home">🏠 Home</option>
+                            <option value="shop">🏪 Shop</option>
+                            <option value="office">🏢 Office</option>
+                            <option value="hotel">🏨 Hotel</option>
+                            <option value="restaurant">🍴 Restaurant</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editCustomerPrice">Price per Can (₹)</label>
+                        <input type="number" id="editCustomerPrice" class="form-input" min="1">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editCustomerModal')">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Customer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Customer Details Modal -->
+    <div id="customerDetailsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Customer Details</h3>
+                <button class="btn btn-close" onclick="closeModal('customerDetailsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="customer-details-content">
+                <div class="detail-section">
+                    <h4>Basic Information</h4>
+                    <div class="detail-item">
+                        <label>Name:</label>
+                        <span id="detailCustomerName">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Phone:</label>
+                        <span id="detailCustomerPhone">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Address:</label>
+                        <span id="detailCustomerAddress">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Type:</label>
+                        <span id="detailCustomerType">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Price per Can:</label>
+                        <span id="detailCustomerPrice">-</span>
+                    </div>
+                </div>
+                <div class="detail-section">
+                    <h4>Delivery Statistics</h4>
+                    <div class="detail-item">
+                        <label>Total Deliveries:</label>
+                        <span id="detailTotalDeliveries">0</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Total Cans:</label>
+                        <span id="detailTotalCans">0</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>This Month:</label>
+                        <span id="detailThisMonth">0 cans</span>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="editCustomerFromDetails()">
+                        <i class="fas fa-edit"></i> Edit Customer
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteCustomerFromDetails()">
+                        <i class="fas fa-trash"></i> Delete Customer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteConfirmModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+                <button class="btn btn-close" onclick="closeModal('deleteConfirmModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this customer? This action cannot be undone.</p>
+                <p><strong id="deleteCustomerName">-</strong></p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('deleteConfirmModal')">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-danger" onclick="confirmDeleteCustomer()">
+                    <i class="fas fa-trash"></i> Delete Customer
+                </button>
+            </div>
         </div>
     </div>
 
@@ -355,6 +507,7 @@
 
     <!-- Hidden Fields -->
     <input type="hidden" id="currentCustomerId">
+    <input type="hidden" id="customerToDelete">
 
     <!-- Firebase Configuration -->
     <script src="firebase-config.js"></script>
