@@ -6,6 +6,8 @@ class AquaFlowApp {
         this.currentView = 'dashboard';
         this.scannerActive = false;
         this.currentCustomerId = null;
+        this.userId = null;
+        this.userData = null;
         this.init();
     }
 
@@ -384,27 +386,7 @@ class AquaFlowApp {
         });
     }
 
-    // Scanner Functions
-    showView(viewName) {
-        // Remove active class from all views
-        document.querySelectorAll('.view').forEach(view => {
-            view.classList.remove('active');
-        });
-
-        // Add active class to the selected view
-        const activeView = document.getElementById(viewName + 'View');
-        if (activeView) {
-            activeView.classList.add('active');
-            this.currentView = viewName;
-        }
-
-        // Update active nav item
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        document.querySelector(`.bottom-nav .nav-item[onclick="showView('${viewName}')"]`).classList.add('active');
-    }
-
+    // Scanner Functions using HTML5 QR Code
     openScanner() {
         this.showModal('scannerModal');
     }
@@ -415,49 +397,90 @@ class AquaFlowApp {
     }
 
     async initializeScanner() {
-        // CRITICAL FIX: Better browser compatibility check
-        if (typeof BarcodeDetector === 'undefined') {
-            console.warn('BarcodeDetector not supported, showing manual entry option');
-            this.showManualEntryOption();
-            return;
-        }
-
         try {
-            // Check if BarcodeDetector is actually functional
-            const formats = await BarcodeDetector.getSupportedFormats();
-            if (!formats.includes('qr_code')) {
-                throw new Error('QR code scanning not supported');
-            }
-
-            const video = document.getElementById('qrVideo');
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" } 
-            });
-            
-            video.srcObject = stream;
-            await video.play();
-            
+            // Hide placeholder, show scanner
             document.getElementById('scannerPlaceholder').classList.add('hidden');
-            document.getElementById('qrScanner').classList.remove('hidden');
+            document.getElementById('qrReader').classList.remove('hidden');
             
-            this.startQRDetection(video);
+            // Initialize HTML5 QR Code scanner
+            html5QrCode = new Html5Qrcode("qrReader");
+            
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+                supportedScanTypes: [
+                    Html5QrcodeScanType.SCAN_TYPE_QR_CODE,
+                    Html5QrcodeScanType.SCAN_TYPE_CAMERA
+                ]
+            };
+
+            // Start scanning
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText) => {
+                    // Success callback
+                    this.onScanSuccess(decodedText);
+                },
+                (errorMessage) => {
+                    // Failure callback - we ignore most failures as they're normal
+                    console.log('Scan failed:', errorMessage);
+                }
+            );
+            
+            console.log('QR Scanner started successfully');
             
         } catch (error) {
-            console.error('Camera/Scanner initialization error:', error);
-            this.showManualEntryOption();
+            console.error('Scanner initialization error:', error);
+            this.handleScannerError(error);
         }
     }
 
-    stopScanner() {
-        const video = document.getElementById('qrVideo');
-        if (video.srcObject) {
-            video.srcObject.getTracks().forEach(track => track.stop());
+    onScanSuccess(decodedText) {
+        console.log('QR Code scanned:', decodedText);
+        this.handleScannedQR(decodedText);
+        
+        // Optional: Stop scanner after successful scan for better UX
+        this.stopScanner();
+        document.getElementById('qrReader').classList.add('hidden');
+    }
+
+    handleScannerError(error) {
+        console.error('Scanner error:', error);
+        
+        let errorMessage = 'Failed to start camera. ';
+        
+        if (error.name === 'NotAllowedError') {
+            errorMessage += 'Camera access was denied. Please allow camera permissions and try again.';
+        } else if (error.name === 'NotFoundError') {
+            errorMessage += 'No camera found on this device.';
+        } else if (error.name === 'NotSupportedError') {
+            errorMessage += 'Camera not supported in this browser.';
+        } else if (error.name === 'NotReadableError') {
+            errorMessage += 'Camera is already in use by another application.';
+        } else {
+            errorMessage += 'Please try again or use manual entry.';
         }
         
-        document.getElementById('scannerPlaceholder').classList.remove('hidden');
-        document.getElementById('qrScanner').classList.add('hidden');
-        document.getElementById('deliveryForm').classList.add('hidden');
-        this.scannerActive = false;
+        showError(errorMessage);
+        this.showManualEntryOption();
+    }
+
+    stopScanner() {
+        if (html5QrCode) {
+            try {
+                html5QrCode.stop().then(() => {
+                    console.log('QR Scanner stopped');
+                    html5QrCode.clear();
+                    html5QrCode = null;
+                }).catch(err => {
+                    console.log('Error stopping scanner:', err);
+                });
+            } catch (error) {
+                console.log('Error in stopScanner:', error);
+            }
+        }
     }
 
     // CRITICAL FIX: Add manual entry option for unsupported browsers
@@ -475,77 +498,22 @@ class AquaFlowApp {
                     <button class="btn btn-secondary" onclick="showManualQRInput()">
                         <i class="fas fa-keyboard"></i> Enter QR Code Manually
                     </button>
+                    <button class="btn btn-outline" onclick="uploadQRImage()">
+                        <i class="fas fa-upload"></i> Upload QR Image
+                    </button>
                 </div>
                 <p class="browser-suggestion">For best experience, use Chrome or Edge on Android/iOS</p>
             </div>
         `;
-        
-        // Hide the start camera button
-        const startButton = scannerPlaceholder.querySelector('.btn-primary');
-        if (startButton) startButton.style.display = 'none';
-    }
-
-    startQRDetection(video) {
-        if (typeof BarcodeDetector === 'undefined') {
-            console.error('BarcodeDetector not available');
-            return;
-        }
-
-        const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-        this.scannerActive = true;
-        
-        const detectFrame = async () => {
-            if (!this.scannerActive) return;
-            
-            try {
-                const barcodes = await barcodeDetector.detect(video);
-                if (barcodes.length > 0) {
-                    this.handleScannedQR(barcodes[0].rawValue);
-                } else {
-                    requestAnimationFrame(detectFrame);
-                }
-            } catch (error) {
-                console.warn('QR detection error, continuing:', error);
-                requestAnimationFrame(detectFrame);
-            }
-        };
-        
-        detectFrame();
-    }
-
-    // CRITICAL FIX: Add manual customer selection
-    showManualCustomerSelect() {
-        const deliveryForm = document.getElementById('deliveryForm');
-        const scannerView = document.getElementById('scannerView');
-        
-        // Create customer selection dropdown
-        const customerSelectHTML = `
-            <div class="manual-customer-select">
-                <h4>Select Customer</h4>
-                <select id="manualCustomerSelect" class="form-input">
-                    <option value="">Choose a customer...</option>
-                    ${this.customers.map(customer => 
-                        `<option value="${customer.id}">${customer.name} - ${customer.phone}</option>`
-                    ).join('')}
-                </select>
-                <div class="form-actions" style="margin-top: 1rem;">
-                    <button class="btn btn-success" onclick="confirmManualCustomer()">
-                        <i class="fas fa-check"></i> Select Customer
-                    </button>
-                    <button class="btn btn-secondary" onclick="resetScanner()">
-                        <i class="fas fa-times"></i> Cancel
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        scannerView.innerHTML = customerSelectHTML;
-        document.getElementById('qrScanner').classList.add('hidden');
+        scannerPlaceholder.classList.remove('hidden');
+        document.getElementById('qrReader').classList.add('hidden');
     }
 
     async handleScannedQR(qrData) {
         if (!qrData.startsWith('AQUAFLOW:')) {
             showError('Invalid QR code. Please scan a valid customer QR code.');
+            // Restart scanner for invalid codes
+            this.resetScanner();
             return;
         }
 
@@ -554,6 +522,7 @@ class AquaFlowApp {
         // Verify the QR code belongs to current user
         if (userId !== this.userId) {
             showError('This QR code belongs to another business.');
+            this.resetScanner();
             return;
         }
 
@@ -565,6 +534,7 @@ class AquaFlowApp {
             const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).get();
             if (!customerDoc.exists) {
                 showError('Customer not found.');
+                this.resetScanner();
                 return;
             }
 
@@ -574,6 +544,7 @@ class AquaFlowApp {
         } catch (error) {
             console.error('Error finding customer:', error);
             showError('Error finding customer data.');
+            this.resetScanner();
         }
     }
 
@@ -584,7 +555,7 @@ class AquaFlowApp {
         document.getElementById('scannedCustomerPhone').textContent = customer.phone;
         document.getElementById('scannedCustomerAddress').textContent = customer.address;
         
-        document.getElementById('qrScanner').classList.add('hidden');
+        document.getElementById('qrReader').classList.add('hidden');
         document.getElementById('deliveryForm').classList.remove('hidden');
     }
 
@@ -630,10 +601,107 @@ class AquaFlowApp {
     }
 
     resetScanner() {
+        this.stopScanner();
         document.getElementById('deliveryForm').classList.add('hidden');
-        document.getElementById('qrScanner').classList.remove('hidden');
+        document.getElementById('scannerPlaceholder').classList.remove('hidden');
+        document.getElementById('qrReader').classList.add('hidden');
         this.currentCustomerId = null;
-        this.initializeScanner();
+        
+        // Reset form
+        document.getElementById('deliveryQuantity').value = '1';
+    }
+
+    // Add the manual customer selection methods
+    showManualCustomerSelect() {
+        const scannerView = document.getElementById('scannerView');
+        
+        // Create customer selection dropdown
+        const customerSelectHTML = `
+            <div class="manual-customer-select">
+                <h4>Select Customer</h4>
+                <select id="manualCustomerSelect" class="form-input">
+                    <option value="">Choose a customer...</option>
+                    ${this.customers.map(customer => 
+                        `<option value="${customer.id}">${customer.name} - ${customer.phone}</option>`
+                    ).join('')}
+                </select>
+                <div class="form-actions" style="margin-top: 1rem;">
+                    <button class="btn btn-success" onclick="confirmManualCustomer()">
+                        <i class="fas fa-check"></i> Select Customer
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetScanner()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        scannerView.innerHTML = customerSelectHTML;
+        document.getElementById('qrReader').classList.add('hidden');
+    }
+
+    // Add image upload functionality for QR codes
+    uploadQRImage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await this.processQRImage(file);
+            }
+        };
+        
+        input.click();
+    }
+
+    async processQRImage(file) {
+        try {
+            showSuccess('Processing QR image...');
+            
+            // Use HTML5 QR Code to scan from file
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("qrReader");
+            }
+            
+            const decodedText = await html5QrCode.scanFile(file, false);
+            
+            if (decodedText) {
+                this.onScanSuccess(decodedText);
+            } else {
+                showError('No QR code found in the image.');
+            }
+            
+        } catch (error) {
+            console.error('Error processing QR image:', error);
+            showError('Failed to read QR code from image. Please try a clearer image.');
+        }
+    }
+
+    // View Management
+    showView(viewName) {
+        // Remove active class from all views
+        document.querySelectorAll('.view').forEach(view => {
+            view.classList.remove('active');
+        });
+
+        // Add active class to the selected view
+        const activeView = document.getElementById(viewName + 'View');
+        if (activeView) {
+            activeView.classList.add('active');
+            this.currentView = viewName;
+        }
+
+        // Update active nav item
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        const navItem = document.querySelector(`.bottom-nav .nav-item[onclick="showView('${viewName}')"]`);
+        if (navItem) {
+            navItem.classList.add('active');
+        }
     }
 
     // Dashboard Functions
@@ -867,6 +935,9 @@ class AquaFlowApp {
     }
 }
 
+// Global HTML5 QR Code scanner instance
+let html5QrCode = null;
+
 // Global functions for HTML event handlers
 let app;
 
@@ -947,7 +1018,7 @@ function showManualQRInput() {
         </div>
     `;
     
-    document.getElementById('qrScanner').classList.add('hidden');
+    document.getElementById('qrReader').classList.add('hidden');
 }
 
 function processManualQR() {
@@ -962,6 +1033,10 @@ function processManualQR() {
     }
     
     app.handleScannedQR(qrData);
+}
+
+function uploadQRImage() {
+    if (app) app.uploadQRImage();
 }
 
 function quickDelivery(customerId) {
@@ -1085,33 +1160,6 @@ function showSettings() {
     if (app) app.showModal('settingsModal');
 }
 
-// Alternative QR scanning with jsQR
-async function startQRDetectionWithJSQR(video) {
-    if (!app) return;
-    
-    app.scannerActive = true;
-    
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    
-    const detectFrame = () => {
-        if (!app.scannerActive) return;
-        
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            
-            if (code) {
-                app.handleScannedQR(code.data);
-            }
-        }
-        
-        requestAnimationFrame(detectFrame);
-    };
-    
-    detectFrame();
+function logout() {
+    authManager.logout();
 }
