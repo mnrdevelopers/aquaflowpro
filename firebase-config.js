@@ -1,4 +1,4 @@
-// Firebase Configuration - Replace with your actual Firebase config
+// Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCqT81J9D6JJChtfwlpXgc8DE0bDkWy4ls",
   authDomain: "aquaflowpro-2ae5a.firebaseapp.com",
@@ -14,13 +14,22 @@ try {
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
     }
+    console.log('Firebase initialized successfully');
 } catch (error) {
     console.error('Firebase initialization error:', error);
-    showError('Failed to initialize app. Please refresh the page.');
 }
 
 const db = firebase.firestore();
 const auth = firebase.auth();
+
+// CRITICAL: Configure auth persistence FIRST
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+  .then(() => {
+    console.log('Auth persistence set to LOCAL');
+  })
+  .catch((error) => {
+    console.error('Error setting auth persistence:', error);
+  });
 
 // Enable offline persistence with better error handling
 db.enablePersistence()
@@ -29,7 +38,7 @@ db.enablePersistence()
   });
 
 // ImgBB API Key for QR code storage
-const IMGBB_API_KEY = 'your-imgbb-api-key-here'; // Get from https://imgbb.com/
+const IMGBB_API_KEY = 'your-imgbb-api-key-here';
 
 // Utility functions
 const getCurrentMonth = () => {
@@ -49,7 +58,6 @@ const formatCurrency = (amount) => {
 
 const showError = (message) => {
     console.error('Error:', message);
-    // Create a simple notification
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
@@ -78,7 +86,6 @@ const showError = (message) => {
 
 const showSuccess = (message) => {
     console.log('Success:', message);
-    // Create a simple notification
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
