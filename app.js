@@ -10,39 +10,69 @@ class AquaFlowApp {
     }
 
     async init() {
-        // CRITICAL: Ensure authentication is fully checked and data is available before proceeding.
+        console.log('App initialization started');
+        
+        // CRITICAL FIX: Wait for auth state to be ready
+        await this.waitForAuthState();
+        
         const authDataReady = await this.checkAuthentication();
         
         if (!authDataReady) {
-            // checkAuthentication handled the redirect or decided to wait for auth.js
+            console.log('Authentication check failed, stopping app initialization');
             return;
         }
 
         this.setupEventListeners();
         await this.loadInitialData();
         this.updateUI();
+        console.log('App initialization completed successfully');
     }
 
-    async checkAuthentication() {
+       async waitForAuthState() {
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds max wait
+        
+        while (!authManager.isAuthStateReady() && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
+        
+        if (attempts >= maxAttempts) {
+            console.warn('Auth state not ready after max attempts, proceeding anyway');
+        }
+    }
+
+  async checkAuthentication() {
         const user = authManager.getCurrentUser();
-        // CRITICAL FIX 1: Use the now-resilient getUserData() from authManager
         this.userData = authManager.getUserData(); 
         
+        console.log('Auth check - User:', user ? 'present' : 'absent', 'UserData:', this.userData ? 'loaded' : 'missing');
+        
         if (!user) {
-            // User is definitely signed out (auth.js onAuthStateChanged already finished)
+            // User is definitely signed out
+            console.log('No user found, redirecting to auth.html');
             window.location.href = 'auth.html';
             return false;
         }
         
         this.userId = user.uid;
         
-        // CRITICAL FIX 2: If user is present but userData is missing (e.g., race condition right after signup
-        // and before loadUserData completed), or if the data failed to load/parse.
+        // CRITICAL FIX: More tolerant approach - if userData is missing but user exists,
+        // try to load it directly instead of immediately failing
         if (!this.userData) {
-            // If data is missing even after checking localStorage (in auth.js), something is wrong.
-            // Log the error but do not redirect to prevent the loop. Stop data loading.
-            console.error('CRITICAL: User is signed in, but user data is unavailable. Blocking data load.');
-            return false;
+            console.log('User data missing, attempting to load directly...');
+            await authManager.loadUserData(user);
+            this.userData = authManager.getUserData();
+            
+            if (!this.userData) {
+                console.error('CRITICAL: User is signed in, but user data is unavailable even after reload. User ID:', this.userId);
+                // Instead of blocking completely, use safe defaults and continue
+                this.userData = {
+                    businessName: 'AquaFlow Pro',
+                    defaultPrice: 20
+                };
+                showError('User data loading issue. Using default settings.');
+            }
         }
         
         return true;
