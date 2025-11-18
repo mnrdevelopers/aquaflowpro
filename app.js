@@ -414,13 +414,21 @@ class AquaFlowApp {
         this.stopScanner();
     }
 
-    async initializeScanner() {
-        if (!('BarcodeDetector' in window)) {
-            showError('QR scanning is not supported in your browser. Please use Chrome or Edge.');
+     async initializeScanner() {
+        // CRITICAL FIX: Better browser compatibility check
+        if (typeof BarcodeDetector === 'undefined') {
+            console.warn('BarcodeDetector not supported, showing manual entry option');
+            this.showManualEntryOption();
             return;
         }
 
         try {
+            // Check if BarcodeDetector is actually functional
+            const formats = await BarcodeDetector.getSupportedFormats();
+            if (!formats.includes('qr_code')) {
+                throw new Error('QR code scanning not supported');
+            }
+
             const video = document.getElementById('qrVideo');
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: "environment" } 
@@ -435,8 +443,8 @@ class AquaFlowApp {
             this.startQRDetection(video);
             
         } catch (error) {
-            console.error('Camera error:', error);
-            showError('Cannot access camera. Please check permissions.');
+            console.error('Camera/Scanner initialization error:', error);
+            this.showManualEntryOption();
         }
     }
 
@@ -452,16 +460,37 @@ class AquaFlowApp {
         this.scannerActive = false;
     }
 
+    // CRITICAL FIX: Add manual entry option for unsupported browsers
+    showManualEntryOption() {
+        const scannerPlaceholder = document.getElementById('scannerPlaceholder');
+        scannerPlaceholder.innerHTML = `
+            <div class="manual-entry-option">
+                <i class="fas fa-camera-slash"></i>
+                <h3>QR Scanner Not Available</h3>
+                <p>Your browser doesn't support QR scanning. You can:</p>
+                <div class="manual-options">
+                    <button class="btn btn-primary" onclick="showManualCustomerSelect()">
+                        <i class="fas fa-list"></i> Select Customer Manually
+                    </button>
+                    <button class="btn btn-secondary" onclick="showManualQRInput()">
+                        <i class="fas fa-keyboard"></i> Enter QR Code Manually
+                    </button>
+                </div>
+                <p class="browser-suggestion">For best experience, use Chrome or Edge on Android/iOS</p>
+            </div>
+        `;
+        
+        // Hide the start camera button
+        const startButton = scannerPlaceholder.querySelector('.btn-primary');
+        if (startButton) startButton.style.display = 'none';
+    }
+
     startQRDetection(video) {
-        // Use a simple polling loop instead of BarcodeDetector if it fails or is not available.
-        // For simplicity and cross-browser compatibility in an iframe environment, 
-        // we'll stick to the existing implementation, but wrap it for safety.
-        
-        if (!('BarcodeDetector' in window)) {
-            // Fallback for non-supported browsers
-            return; 
+        if (typeof BarcodeDetector === 'undefined') {
+            console.error('BarcodeDetector not available');
+            return;
         }
-        
+
         const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
         this.scannerActive = true;
         
@@ -476,7 +505,7 @@ class AquaFlowApp {
                     requestAnimationFrame(detectFrame);
                 }
             } catch (error) {
-                // If detection fails for this frame, continue trying
+                console.warn('QR detection error, continuing:', error);
                 requestAnimationFrame(detectFrame);
             }
         };
@@ -484,6 +513,37 @@ class AquaFlowApp {
         detectFrame();
     }
 
+     // CRITICAL FIX: Add manual customer selection
+    showManualCustomerSelect() {
+        const deliveryForm = document.getElementById('deliveryForm');
+        const scannerView = document.getElementById('scannerView');
+        
+        // Create customer selection dropdown
+        const customerSelectHTML = `
+            <div class="manual-customer-select">
+                <h4>Select Customer</h4>
+                <select id="manualCustomerSelect" class="form-input">
+                    <option value="">Choose a customer...</option>
+                    ${this.customers.map(customer => 
+                        `<option value="${customer.id}">${customer.name} - ${customer.phone}</option>`
+                    ).join('')}
+                </select>
+                <div class="form-actions" style="margin-top: 1rem;">
+                    <button class="btn btn-success" onclick="confirmManualCustomer()">
+                        <i class="fas fa-check"></i> Select Customer
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetScanner()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        scannerView.innerHTML = customerSelectHTML;
+        document.getElementById('qrScanner').classList.add('hidden');
+    }
+}
+    
     async handleScannedQR(qrData) {
         if (!qrData.startsWith('AQUAFLOW:')) {
             showError('Invalid QR code. Please scan a valid customer QR code.');
@@ -846,6 +906,65 @@ function confirmDelivery() {
 function resetScanner() {
     if (app) app.resetScanner();
 }
+
+// Global functions for manual operations
+function showManualCustomerSelect() {
+    if (app) app.showManualCustomerSelect();
+}
+
+function confirmManualCustomer() {
+    if (!app) return;
+    
+    const select = document.getElementById('manualCustomerSelect');
+    const customerId = select.value;
+    
+    if (!customerId) {
+        showError('Please select a customer');
+        return;
+    }
+    
+    const customer = app.customers.find(c => c.id === customerId);
+    if (customer) {
+        app.showDeliveryForm(customerId, customer);
+        document.getElementById('deliveryForm').classList.remove('hidden');
+    }
+}
+
+function showManualQRInput() {
+    const scannerView = document.getElementById('scannerView');
+    
+    scannerView.innerHTML = `
+        <div class="manual-qr-input">
+            <h4>Enter QR Code Manually</h4>
+            <input type="text" id="manualQRInput" class="form-input" placeholder="Paste QR code data here...">
+            <div class="form-actions" style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="processManualQR()">
+                    <i class="fas fa-check"></i> Process QR Code
+                </button>
+                <button class="btn btn-secondary" onclick="resetScanner()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('qrScanner').classList.add('hidden');
+}
+
+function processManualQR() {
+    if (!app) return;
+    
+    const qrInput = document.getElementById('manualQRInput');
+    const qrData = qrInput.value.trim();
+    
+    if (!qrData) {
+        showError('Please enter QR code data');
+        return;
+    }
+    
+    app.handleScannedQR(qrData);
+}
+
 
 function quickDelivery(customerId) {
     const quantity = parseInt(prompt('Enter number of cans:', '1')) || 1;
