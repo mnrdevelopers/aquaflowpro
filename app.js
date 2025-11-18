@@ -1086,3 +1086,32 @@ function showNotifications() {
 function showSettings() {
     if (app) app.showModal('settingsModal');
 }
+
+// Alternative QR scanning with jsQR
+async startQRDetectionWithJSQR(video) {
+    this.scannerActive = true;
+    
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    
+    const detectFrame = () => {
+        if (!this.scannerActive) return;
+        
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            
+            if (code) {
+                this.handleScannedQR(code.data);
+            }
+        }
+        
+        requestAnimationFrame(detectFrame);
+    };
+    
+    detectFrame();
+}
