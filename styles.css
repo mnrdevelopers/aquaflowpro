@@ -1315,7 +1315,28 @@ textarea.form-input {
     background: var(--gray-500);
 }
 
-/* Add to styles.css */
+/* HTML5 QR Code Scanner Styles */
+#qrReader {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+#qrReader video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--radius-lg);
+}
+
+/* Scanner frame overlay */
+#qrReader div:first-child {
+    border: 3px solid var(--primary) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Manual entry styles */
 .manual-entry-option {
     text-align: center;
     padding: 2rem;
@@ -1340,12 +1361,6 @@ textarea.form-input {
     margin: 2rem 0;
 }
 
-.browser-suggestion {
-    font-size: 0.8rem;
-    color: var(--gray-500);
-    margin-top: 1rem;
-}
-
 .manual-customer-select,
 .manual-qr-input {
     padding: 1rem;
@@ -1358,4 +1373,10 @@ textarea.form-input {
 .manual-qr-input h4 {
     margin-bottom: 1rem;
     color: var(--gray-800);
+}
+
+.browser-suggestion {
+    font-size: 0.8rem;
+    color: var(--gray-500);
+    margin-top: 1rem;
 }
