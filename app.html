@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaFlow Pro - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="app-page">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="business-info">
+                    <h1 id="businessName">AquaFlow Pro</h1>
+                    <span class="status-online" id="connectionStatus">
+                        <i class="fas fa-circle"></i> Online
+                    </span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-icon" onclick="showNotifications()">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge hidden" id="notificationCount">0</span>
+                </button>
+                <button class="btn btn-icon" onclick="showSettings()">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dashboard View -->
+        <section id="dashboardView" class="view active">
+            <!-- Stats Overview -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-number" id="totalCustomers">0</div>
+                        <div class="stat-label">Total Customers</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-number" id="todayDeliveries">0</div>
+                        <div class="stat-label">Today's Deliveries</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-truck-loading"></i>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-number" id="monthlyRevenue">₹0</div>
+                        <div class="stat-label">This Month</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-rupee-sign"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions-section">
+                <h3>Quick Actions</h3>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="showView('customers')">
+                        <i class="fas fa-user-plus"></i>
+                        Add Customer
+                    </button>
+                    <button class="quick-action-btn" onclick="showView('billing')">
+                        <i class="fas fa-file-invoice"></i>
+                        Generate Bills
+                    </button>
+                    <button class="quick-action-btn" onclick="showView('customers')">
+                        <i class="fas fa-users"></i>
+                        View Customers
+                    </button>
+                    <button class="quick-action-btn" onclick="showView('reports')">
+                        <i class="fas fa-chart-bar"></i>
+                        Reports
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="recent-activity">
+                <div class="section-header">
+                    <h3>Recent Deliveries</h3>
+                    <button class="btn btn-text" onclick="showAllDeliveries()">View All</button>
+                </div>
+                <div id="recentDeliveriesList" class="activity-list">
+                    <!-- Recent deliveries will be loaded here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Customers View -->
+        <section id="customersView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Customer Management</h2>
+                <button class="btn btn-primary" onclick="showAddCustomerModal()">
+                    <i class="fas fa-plus"></i> Add Customer
+                </button>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="search-section">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="customerSearch" placeholder="Search customers by name, phone, or address...">
+                </div>
+            </div>
+
+            <!-- Customers List -->
+            <div id="customersList" class="customers-list">
+                <!-- Customers will be loaded here -->
+            </div>
+        </section>
+
+        <!-- Billing View -->
+        <section id="billingView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Billing & Payments</h2>
+            </div>
+
+            <div class="billing-controls">
+                <div class="form-group">
+                    <label for="billMonth">Select Month</label>
+                    <input type="month" id="billMonth" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="billCustomer">Select Customer</label>
+                    <select id="billCustomer" class="form-input">
+                        <option value="all">All Customers</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-block" onclick="generateBills()">
+                    <i class="fas fa-calculator"></i> Generate Bills
+                </button>
+            </div>
+
+            <div id="billingResults" class="billing-results hidden">
+                <h3>Generated Bills</h3>
+                <div id="billsList" class="bills-list">
+                    <!-- Bills will be displayed here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Reports View -->
+        <section id="reportsView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Business Reports</h2>
+            </div>
+
+            <div class="reports-container">
+                <div class="report-card">
+                    <h4>Monthly Performance</h4>
+                    <div id="monthlyReport" class="report-content">
+                        <!-- Monthly report content -->
+                    </div>
+                </div>
+                <div class="report-card">
+                    <h4>Top Customers</h4>
+                    <div id="topCustomersReport" class="report-content">
+                        <!-- Top customers list -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Add Customer Modal -->
+    <div id="addCustomerModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Customer</h3>
+                <button class="btn btn-close" onclick="closeModal('addCustomerModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="addCustomerForm" onsubmit="addCustomer(event)">
+                <div class="form-group">
+                    <label for="customerName">Full Name *</label>
+                    <input type="text" id="customerName" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="customerPhone">Phone Number *</label>
+                    <input type="tel" id="customerPhone" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="customerAddress">Delivery Address *</label>
+                    <textarea id="customerAddress" class="form-input" rows="3" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customerType">Customer Type</label>
+                        <select id="customerType" class="form-input">
+                            <option value="home">🏠 Home</option>
+                            <option value="shop">🏪 Shop</option>
+                            <option value="office">🏢 Office</option>
+                            <option value="hotel">🏨 Hotel</option>
+                            <option value="restaurant">🍴 Restaurant</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="customerPrice">Price per Can (₹)</label>
+                        <input type="number" id="customerPrice" class="form-input" value="20" min="1">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addCustomerModal')">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Customer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- QR Scanner Modal -->
+    <div id="scannerModal" class="modal hidden">
+        <div class="modal-content scanner-modal">
+            <div class="modal-header">
+                <h3>Scan Customer QR Code</h3>
+                <button class="btn btn-close" onclick="closeScanner()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="scanner-container">
+                <div id="scannerView" class="scanner-view">
+                    <div id="scannerPlaceholder" class="scanner-placeholder">
+                        <i class="fas fa-qrcode"></i>
+                        <p>Position QR code within frame to scan</p>
+                        <button class="btn btn-primary" onclick="initializeScanner()">
+                            Start Camera
+                        </button>
+                    </div>
+                    <div id="qrScanner" class="qr-scanner hidden">
+                        <video id="qrVideo" playsinline></video>
+                        <div class="scanner-frame"></div>
+                    </div>
+                </div>
+                
+                <div id="deliveryForm" class="delivery-form hidden">
+                    <div class="customer-info">
+                        <h4>Customer Details</h4>
+                        <p><strong>Name:</strong> <span id="scannedCustomerName">-</span></p>
+                        <p><strong>Phone:</strong> <span id="scannedCustomerPhone">-</span></p>
+                        <p><strong>Address:</strong> <span id="scannedCustomerAddress">-</span></p>
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Cans</label>
+                        <input type="number" id="deliveryQuantity" class="form-input" value="1" min="1">
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-success" onclick="confirmDelivery()">
+                            <i class="fas fa-check"></i> Confirm Delivery
+                        </button>
+                        <button class="btn btn-secondary" onclick="resetScanner()">
+                            <i class="fas fa-redo"></i> Scan Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="btn btn-close" onclick="closeModal('settingsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-section">
+                    <h4>Business Information</h4>
+                    <div class="setting-item">
+                        <label>Business Name</label>
+                        <input type="text" id="settingsBusinessName" class="form-input">
+                    </div>
+                    <div class="setting-item">
+                        <label>Default Price per Can (₹)</label>
+                        <input type="number" id="settingsDefaultPrice" class="form-input" min="1">
+                    </div>
+                </div>
+                <div class="setting-section">
+                    <h4>Account</h4>
+                    <button class="btn btn-danger btn-block" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item" onclick="showView('dashboard')">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </button>
+        
+        <button class="nav-item" onclick="showView('customers')">
+            <i class="fas fa-users"></i>
+            <span>Customers</span>
+        </button>
+        
+        <!-- Big Scanner Button -->
+        <div class="nav-scanner">
+            <button class="scanner-btn" onclick="openScanner()">
+                <i class="fas fa-qrcode"></i>
+            </button>
+        </div>
+        
+        <button class="nav-item" onclick="showView('billing')">
+            <i class="fas fa-file-invoice"></i>
+            <span>Billing</span>
+        </button>
+        
+        <button class="nav-item" onclick="showView('reports')">
+            <i class="fas fa-chart-bar"></i>
+            <span>Reports</span>
+        </button>
+    </nav>
+
+    <!-- Hidden Fields -->
+    <input type="hidden" id="currentCustomerId">
+
+    <!-- Scripts -->
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+</body>
+</html>
