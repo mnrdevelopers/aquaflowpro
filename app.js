@@ -1580,13 +1580,6 @@ class AquaFlowApp {
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        const upiId = this.userData?.upiId;
-        if (!upiId) {
-            showError('Please save your UPI ID in Settings to generate payment links.');
-            this.showModal('settingsModal');
-            return;
-        }
-
         // Robust Phone Number Formatting
         let phone = customer.phone.replace(/\D/g, ''); // Remove non-digits
         
@@ -1607,36 +1600,23 @@ class AquaFlowApp {
         }
 
         const businessName = this.userData.businessName || 'AquaFlow Pro';
-        const note = `Water Bill ${month}`;
+        const contactInfo = this.userData.businessPhone || 'the business owner';
         
-        // Format parameters for UPI URL
-        // Use + for spaces to ensure the link remains unbroken in WhatsApp but is readable
-        const safeName = encodeURIComponent(businessName).replace(/%20/g, '+');
-        const safeNote = encodeURIComponent(note).replace(/%20/g, '+');
-        const safeAmount = parseFloat(amount).toFixed(2); // Ensure decimal format
-
-        // Construct UPI Link
-        // Note: 'am' must be decimal. 'pn' should not have spaces (handled by safeName).
-        const upiLink = `upi://pay?pa=${upiId}&pn=${safeName}&am=${safeAmount}&cu=INR&tn=${safeNote}`;
-        
-        // Create Message with clear separation for the link
+        // Create Message
         const message = `Hello ${customer.name},
 Your water delivery bill for ${month} is *₹${amount}* (${totalCans} cans).
 
-*Pay Now:*
-${upiLink}
+Please pay via Cash or PhonePe.
+Contact us at: ${contactInfo}
 
 Thank you,
 ${businessName}`;
 
         // Use api.whatsapp.com for better cross-platform compatibility
-        // encodeURIComponent on the WHOLE message ensures the upiLink's special chars (like & and ?) are preserved in the whatsapp URL param
         const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
         
-        // Try to open
         const win = window.open(whatsappUrl, '_blank');
         
-        // Fallback if popup blocked (though rarer on mobile click events)
         if (!win) {
             window.location.href = whatsappUrl;
         }
@@ -1739,14 +1719,12 @@ ${businessName}`;
         e.preventDefault();
         const businessName = document.getElementById('settingsBusinessName').value;
         const defaultPrice = parseInt(document.getElementById('settingsDefaultPrice').value);
-        const upiId = document.getElementById('settingsUpiId').value.trim();
 
         try {
              const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
              await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).update({
                  businessName,
                  defaultPrice,
-                 upiId, // Save UPI ID
                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
              });
              
@@ -1754,9 +1732,8 @@ ${businessName}`;
              if (this.userData) {
                  this.userData.businessName = businessName;
                  this.userData.defaultPrice = defaultPrice;
-                 this.userData.upiId = upiId;
              } else {
-                 this.userData = { businessName, defaultPrice, upiId };
+                 this.userData = { businessName, defaultPrice };
              }
              
              this.updateUI();
@@ -1786,16 +1763,12 @@ ${businessName}`;
         
         const settingsBusinessName = document.getElementById('settingsBusinessName');
         const settingsDefaultPrice = document.getElementById('settingsDefaultPrice');
-        const settingsUpiId = document.getElementById('settingsUpiId');
 
         if (settingsBusinessName && this.userData) {
             settingsBusinessName.value = this.userData.businessName || '';
         }
         if (settingsDefaultPrice && this.userData) {
             settingsDefaultPrice.value = this.userData.defaultPrice || 20;
-        }
-        if (settingsUpiId && this.userData) {
-            settingsUpiId.value = this.userData.upiId || '';
         }
         
         this.showView(this.currentView);
