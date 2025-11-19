@@ -1562,6 +1562,9 @@ class AquaFlowApp {
                                 <i class="fas fa-check"></i> Mark Paid
                             </button>`
                         }
+                        <button class="btn" style="background-color: #25D366; color: white;" onclick="app.sendWhatsAppReminder('${bill.customerId}', '${bill.month}', ${bill.totalAmount}, ${bill.totalCans})" title="Send WhatsApp Reminder">
+                            <i class="fab fa-whatsapp"></i> Remind
+                        </button>
                         <button class="btn btn-secondary" onclick="printBill('${bill.customerId}', '${bill.month}')">
                             <i class="fas fa-print"></i> Print
                         </button>
@@ -1571,6 +1574,45 @@ class AquaFlowApp {
         }
         
         results.classList.remove('hidden');
+    }
+
+    sendWhatsAppReminder(customerId, month, amount, totalCans) {
+        const customer = this.customers.find(c => c.id === customerId);
+        if (!customer) return;
+
+        const upiId = this.userData?.upiId;
+        if (!upiId) {
+            showError('Please save your UPI ID in Settings to generate payment links.');
+            this.showModal('settingsModal');
+            return;
+        }
+
+        // Format phone number (strip non-digits)
+        let phone = customer.phone.replace(/\D/g, '');
+        if (phone.length === 10) {
+            phone = '91' + phone; // Assume India if no country code
+        }
+
+        const businessName = this.userData.businessName || 'AquaFlow Pro';
+        const note = `Water Bill ${month}`;
+        
+        // Generate UPI Link
+        // Format: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR&tn=NOTE
+        const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(businessName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
+        
+        // Create Message
+        const message = `Hello ${customer.name},
+Your water delivery bill for ${month} is *₹${amount}* (${totalCans} cans).
+
+Please pay using this UPI link:
+${upiLink}
+
+Thank you,
+${businessName}`;
+
+        // Open WhatsApp
+        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
     }
 
     async markBillPaid(customerId, month, amount) {
@@ -1670,20 +1712,24 @@ class AquaFlowApp {
         e.preventDefault();
         const businessName = document.getElementById('settingsBusinessName').value;
         const defaultPrice = parseInt(document.getElementById('settingsDefaultPrice').value);
+        const upiId = document.getElementById('settingsUpiId').value.trim();
 
         try {
              const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
              await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).update({
                  businessName,
                  defaultPrice,
+                 upiId, // Save UPI ID
                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
              });
              
+             // Update local user data
              if (this.userData) {
                  this.userData.businessName = businessName;
                  this.userData.defaultPrice = defaultPrice;
+                 this.userData.upiId = upiId;
              } else {
-                 this.userData = { businessName, defaultPrice };
+                 this.userData = { businessName, defaultPrice, upiId };
              }
              
              this.updateUI();
@@ -1713,11 +1759,16 @@ class AquaFlowApp {
         
         const settingsBusinessName = document.getElementById('settingsBusinessName');
         const settingsDefaultPrice = document.getElementById('settingsDefaultPrice');
+        const settingsUpiId = document.getElementById('settingsUpiId');
+
         if (settingsBusinessName && this.userData) {
             settingsBusinessName.value = this.userData.businessName || '';
         }
         if (settingsDefaultPrice && this.userData) {
             settingsDefaultPrice.value = this.userData.defaultPrice || 20;
+        }
+        if (settingsUpiId && this.userData) {
+            settingsUpiId.value = this.userData.upiId || '';
         }
         
         this.showView(this.currentView);
