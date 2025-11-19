@@ -1719,12 +1719,14 @@ ${businessName}`;
         e.preventDefault();
         const businessName = document.getElementById('settingsBusinessName').value;
         const defaultPrice = parseInt(document.getElementById('settingsDefaultPrice').value);
+        const businessPhone = document.getElementById('settingsBusinessPhone').value;
 
         try {
              const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
              await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).update({
                  businessName,
                  defaultPrice,
+                 businessPhone, // Save the contact number
                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
              });
              
@@ -1732,8 +1734,9 @@ ${businessName}`;
              if (this.userData) {
                  this.userData.businessName = businessName;
                  this.userData.defaultPrice = defaultPrice;
+                 this.userData.businessPhone = businessPhone;
              } else {
-                 this.userData = { businessName, defaultPrice };
+                 this.userData = { businessName, defaultPrice, businessPhone };
              }
              
              this.updateUI();
@@ -1763,12 +1766,16 @@ ${businessName}`;
         
         const settingsBusinessName = document.getElementById('settingsBusinessName');
         const settingsDefaultPrice = document.getElementById('settingsDefaultPrice');
+        const settingsBusinessPhone = document.getElementById('settingsBusinessPhone');
 
         if (settingsBusinessName && this.userData) {
             settingsBusinessName.value = this.userData.businessName || '';
         }
         if (settingsDefaultPrice && this.userData) {
             settingsDefaultPrice.value = this.userData.defaultPrice || 20;
+        }
+        if (settingsBusinessPhone && this.userData) {
+            settingsBusinessPhone.value = this.userData.businessPhone || '';
         }
         
         this.showView(this.currentView);
