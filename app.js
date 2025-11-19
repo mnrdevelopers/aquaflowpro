@@ -7,6 +7,7 @@ class AquaFlowApp {
         this.filteredDeliveries = []; // For the delivery list view
         this.notifications = [];
         this.payments = []; 
+        this.staffMembers = []; // Added for staff management
         this.currentView = 'dashboard';
         this.scannerActive = false;
         this.currentCustomerId = null;
@@ -1887,10 +1888,85 @@ ${businessName}`;
             }
         }
     }
+    
+    // Added Staff Management Methods inside class
+    async loadStaffMembers() {
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            
+            // Query all users where ownerId matches current user ID (staff members)
+            const staffSnapshot = await db.collection('artifacts').doc(appId).collection('users')
+                .where('ownerId', '==', this.userId)
+                .where('role', '==', 'staff')
+                .get();
+                
+            this.staffMembers = staffSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            
+            this.displayStaffMembers();
+        } catch (error) {
+            console.error('Error loading staff members:', error);
+        }
+    }
+
+    displayStaffMembers() {
+        const container = document.getElementById('staffMembersList');
+        if (!container) return;
+
+        if (!this.staffMembers || this.staffMembers.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <p>No staff members added yet</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = this.staffMembers.map(staff => `
+            <div class="staff-member-item">
+                <div class="staff-info">
+                    <div class="staff-name">${staff.ownerName}</div>
+                    <div class="staff-email">${staff.email}</div>
+                    <div class="staff-join-date">Joined: ${staff.createdAt?.toDate?.().toLocaleDateString() || 'N/A'}</div>
+                </div>
+                <div class="staff-actions">
+                    <button class="btn btn-sm btn-danger" onclick="removeStaffMember('${staff.id}')">
+                        <i class="fas fa-trash"></i> Remove
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async removeStaffMember(staffId) {
+        if (!confirm('Are you sure you want to remove this staff member?')) return;
+        
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            await db.collection('artifacts').doc(appId).collection('users').doc(staffId).delete();
+            
+            // Remove from local array
+            this.staffMembers = this.staffMembers.filter(staff => staff.id !== staffId);
+            this.displayStaffMembers();
+            
+            showSuccess('Staff member removed successfully');
+        } catch (error) {
+            console.error('Error removing staff member:', error);
+            showError('Failed to remove staff member');
+        }
+    }
 
     showModal(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) modal.classList.remove('hidden');
+        
+        // Trigger staff load when settings modal is opened
+        if (modalId === 'settingsModal' && this.userRole === 'owner') {
+            this.loadStaffMembers();
+        }
     }
 
     closeModal(modalId) {
@@ -2172,72 +2248,7 @@ function copyBusinessId() {
     showSuccess('Business ID copied to clipboard!');
 }
 
-// Add to the AquaFlowApp class
-async loadStaffMembers() {
-    try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
-        // Query all users where ownerId matches current user ID (staff members)
-        const staffSnapshot = await db.collection('artifacts').doc(appId).collection('users')
-            .where('ownerId', '==', this.userId)
-            .where('role', '==', 'staff')
-            .get();
-            
-        this.staffMembers = staffSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-        
-        this.displayStaffMembers();
-    } catch (error) {
-        console.error('Error loading staff members:', error);
-    }
-}
-
-displayStaffMembers() {
-    const container = document.getElementById('staffMembersList');
-    if (!container) return;
-
-    if (!this.staffMembers || this.staffMembers.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-users"></i>
-                <p>No staff members added yet</p>
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = this.staffMembers.map(staff => `
-        <div class="staff-member-item">
-            <div class="staff-info">
-                <div class="staff-name">${staff.ownerName}</div>
-                <div class="staff-email">${staff.email}</div>
-                <div class="staff-join-date">Joined: ${staff.createdAt?.toDate?.().toLocaleDateString() || 'N/A'}</div>
-            </div>
-            <div class="staff-actions">
-                <button class="btn btn-sm btn-danger" onclick="removeStaffMember('${staff.id}')">
-                    <i class="fas fa-trash"></i> Remove
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-async removeStaffMember(staffId) {
-    if (!confirm('Are you sure you want to remove this staff member?')) return;
-    
-    try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        await db.collection('artifacts').doc(appId).collection('users').doc(staffId).delete();
-        
-        // Remove from local array
-        this.staffMembers = this.staffMembers.filter(staff => staff.id !== staffId);
-        this.displayStaffMembers();
-        
-        showSuccess('Staff member removed successfully');
-    } catch (error) {
-        console.error('Error removing staff member:', error);
-        showError('Failed to remove staff member');
-    }
+// Global wrapper for removing staff members
+function removeStaffMember(staffId) {
+    if (app) app.removeStaffMember(staffId);
 }
