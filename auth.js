@@ -12,33 +12,34 @@ class AuthManager {
         this.setupFormHandlers();
     }
 
-    setupAuthStateListener() {
-        auth.onAuthStateChanged(async (user) => {
-            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
-            this.currentUser = user;
-            this.authStateReady = true;
+   setupAuthStateListener() {
+    auth.onAuthStateChanged(async (user) => {
+        console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+        this.currentUser = user;
+        this.authStateReady = true;
+        
+        if (user) {
+            const userDataLoaded = await this.loadUserData(user);
             
-            if (user) {
-                // User is signed in
-                const userDataLoaded = await this.loadUserData(user);
-                
-                // Redirect if on auth page AND user data is loaded
-                if (window.location.pathname.includes('auth.html') && userDataLoaded) {
-                    console.log('Redirecting to app.html - User authenticated with data');
+            if (window.location.pathname.includes('auth.html') && userDataLoaded) {
+                // Redirect based on role
+                if (this.userData.role === 'staff') {
+                    window.location.href = 'staff.html';
+                } else {
                     window.location.href = 'app.html';
                 }
-            } else {
-                // User is signed out
-                this.userData = null;
-                localStorage.removeItem('userData');
-                
-                if (window.location.pathname.includes('app.html')) {
-                    console.log('Redirecting to auth.html - User signed out');
-                    window.location.href = 'auth.html';
-                }
             }
-        });
-    }
+        } else {
+            this.userData = null;
+            localStorage.removeItem('userData');
+            
+            if (window.location.pathname.includes('app.html') || 
+                window.location.pathname.includes('staff.html')) {
+                window.location.href = 'auth.html';
+            }
+        }
+    });
+}
 
    setupFormHandlers() {
     // Login form
