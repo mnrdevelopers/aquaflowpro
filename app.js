@@ -67,6 +67,12 @@ class AquaFlowApp {
         }
         
         this.userId = user.uid;
+
+        // Check if email is verified
+        if (user && !user.emailVerified) {
+            const banner = document.getElementById('verificationBanner');
+            if (banner) banner.style.display = 'block';
+        }
         
         if (!this.userData) {
             console.log('User data missing, attempting to load directly...');
@@ -1771,6 +1777,53 @@ ${businessName}`;
         } catch(error) {
             console.error(error);
             showError('Failed to save settings');
+        }
+    }
+
+    async changePassword() {
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+        if (newPassword !== confirmNewPassword) {
+            showError('Passwords do not match.');
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            showError('Password must be at least 6 characters long.');
+            return;
+        }
+
+        try {
+            const user = auth.currentUser;
+            await user.updatePassword(newPassword);
+            showSuccess('Password updated successfully!');
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmNewPassword').value = '';
+        } catch (error) {
+            console.error('Change password error:', error);
+            if (error.code === 'auth/requires-recent-login') {
+                showError('Please logout and login again to change your password.');
+            } else {
+                showError('Failed to update password.');
+            }
+        }
+    }
+    
+    async resendVerificationEmail() {
+        try {
+            const user = auth.currentUser;
+            if (user) {
+                await user.sendEmailVerification();
+                showSuccess('Verification email sent!');
+            }
+        } catch (error) {
+            console.error('Error sending verification email:', error);
+            if(error.code === 'auth/too-many-requests') {
+                showError('Too many requests. Please try again later.');
+            } else {
+                showError('Failed to send email.');
+            }
         }
     }
 
