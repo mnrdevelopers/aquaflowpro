@@ -12,45 +12,23 @@ class AuthManager {
         this.setupFormHandlers();
     }
 
-    setupAuthStateListener() {
+  setupAuthStateListener() {
     auth.onAuthStateChanged(async (user) => {
         console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
         this.currentUser = user;
         this.authStateReady = true;
         
         if (user) {
-            // Add a small delay to ensure everything is loaded
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // CRITICAL: Wait for user data to be fully loaded
+            await this.ensureUserDataLoaded(user);
             
             // Check if we are currently on the auth page
             const path = window.location.pathname;
             const isAuthPage = path.includes('auth.html') || path === '/' || path.endsWith('/');
 
             if (isAuthPage) {
-                // 1. Try to load user data
-                if (!this.userData) {
-                    await this.loadUserData(user);
-                }
-                
-                // 2. Add additional verification before redirect
-                if (this.userData && this.userData.role) {
-                    console.log('User data ready, redirecting...', this.userData.role);
-                    // Use setTimeout to ensure the redirect happens in the next event loop
-                    setTimeout(() => {
-                        this.redirectBasedOnRole();
-                    }, 100);
-                } else {
-                    console.log('User data not ready, waiting...');
-                    // Try one more time after a delay
-                    setTimeout(async () => {
-                        if (!this.userData) {
-                            await this.loadUserData(user);
-                        }
-                        if (this.userData && this.userData.role) {
-                            this.redirectBasedOnRole();
-                        }
-                    }, 1000);
-                }
+                console.log('On auth page with authenticated user, redirecting...');
+                this.redirectBasedOnRole();
             }
         } else {
             this.userData = null;
@@ -63,6 +41,43 @@ class AuthManager {
             }
         }
     });
+}
+
+    // Add this new method to ensure user data is loaded
+async ensureUserDataLoaded(user) {
+    if (this.userData && this.userData.role) {
+        console.log('User data already loaded:', this.userData.role);
+        return true;
+    }
+    
+    console.log('Loading user data...');
+    let attempts = 0;
+    const maxAttempts = 5;
+    
+    while (attempts < maxAttempts) {
+        try {
+            const success = await this.loadUserData(user);
+            if (success && this.userData && this.userData.role) {
+                console.log('User data loaded successfully:', this.userData.role);
+                return true;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                console.log(`Retrying user data load... (${attempts}/${maxAttempts})`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch (error) {
+            console.error('Error loading user data:', error);
+            attempts++;
+            if (attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+    }
+    
+    console.error('Failed to load user data after', maxAttempts, 'attempts');
+    return false;
 }
 
    redirectBasedOnRole() {
@@ -176,7 +191,9 @@ clearInputError(input) {
     input.style.borderColor = '';
 }
     
- async handleLogin(e) {
+ // In auth.js - Replace the handleLogin method
+
+async handleLogin(e) {
     e.preventDefault();
     
     const email = document.getElementById('loginEmail').value;
@@ -196,26 +213,26 @@ clearInputError(input) {
         localStorage.removeItem('userData');
         
         // Perform Login
-        await auth.signInWithEmailAndPassword(email, password);
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
         
-        showSuccess('Welcome back! Redirecting...');
+        console.log('Login successful, loading user data...');
         
-        // Force a small delay to ensure auth state is fully processed
-        setTimeout(() => {
-            // If still on auth page after 2 seconds, force redirect
-            if (window.location.pathname.includes('auth.html') || 
-                window.location.pathname === '/' || 
-                window.location.pathname.endsWith('/')) {
-                
-                console.log('Forcing redirect after timeout');
-                if (this.userData && this.userData.role) {
-                    this.redirectBasedOnRole();
-                } else {
-                    // Last resort: redirect to app and let it handle auth
-                    window.location.replace('app.html');
-                }
-            }
-        }, 2000);
+        // Wait for user data to be loaded
+        const dataLoaded = await this.ensureUserDataLoaded(user);
+        
+        if (dataLoaded) {
+            showSuccess('Welcome back! Redirecting...');
+            console.log('User data loaded, redirecting to:', this.userData.role);
+            
+            // Use setTimeout to ensure UI updates before redirect
+            setTimeout(() => {
+                this.redirectBasedOnRole();
+            }, 100);
+        } else {
+            showError('Failed to load user profile. Please try again.');
+            this.setFormLoading('loginForm', false);
+        }
         
     } catch (error) {
         console.error('Login error:', error);
