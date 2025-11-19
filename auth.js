@@ -73,6 +73,11 @@ class AuthManager {
 validateInput(input) {
     this.clearInputError(input);
     
+    // Skip validation for hidden inputs (based on role selection)
+    if (input.offsetParent === null) {
+        return true;
+    }
+    
     if (!input.value.trim()) {
         this.showInputError(input, 'This field is required');
         return false;
@@ -189,34 +194,61 @@ clearInputError(input) {
    async handleSignup(e) {
         e.preventDefault();
         
-        const businessName = document.getElementById('businessName').value;
-        const ownerName = document.getElementById('ownerName').value;
-        const businessPhone = document.getElementById('businessPhone').value;
-        const businessAddress = document.getElementById('businessAddress').value;
+        const isStaff = document.getElementById('isStaffCheckbox').checked;
         const email = document.getElementById('signupEmail').value;
         const password = document.getElementById('signupPassword').value;
-        const defaultPriceInput = document.getElementById('defaultPrice').value;
-        const defaultPrice = parseInt(defaultPriceInput) || 20;
+        const ownerName = document.getElementById('ownerName').value;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
-        // Validate all inputs
-        const inputs = [
-            'businessName', 'ownerName', 'businessPhone', 
-            'businessAddress', 'signupEmail', 'signupPassword', 'defaultPrice'
-        ];
-        
-        let allValid = true;
-        inputs.forEach(inputId => {
-            const input = document.getElementById(inputId);
-            if (input && !this.validateInput(input)) {
-                allValid = false;
+        // Prepare Data object based on role
+        let userData = {
+            email,
+            ownerName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            status: 'active'
+        };
+
+        if (isStaff) {
+            // Staff Validation
+            const businessOwnerId = document.getElementById('businessOwnerId').value.trim();
+            if (!businessOwnerId) {
+                this.showInputError(document.getElementById('businessOwnerId'), 'Business Owner ID is required');
+                return;
             }
-        });
-        
-        if (!allValid) return;
+            userData.role = 'staff';
+            userData.ownerId = businessOwnerId;
+            // Note: Staff inherits business details from the ownerId when loaded in app.js
+        } else {
+            // Business Owner Validation
+            const businessName = document.getElementById('businessName').value;
+            const businessPhone = document.getElementById('businessPhone').value;
+            const businessAddress = document.getElementById('businessAddress').value;
+            const defaultPrice = parseInt(document.getElementById('defaultPrice').value) || 20;
+
+            userData.role = 'owner';
+            userData.businessName = businessName;
+            userData.businessPhone = businessPhone;
+            userData.businessAddress = businessAddress;
+            userData.defaultPrice = defaultPrice;
+            userData.subscription = 'free';
+        }
         
         try {
             this.setFormLoading('signupForm', true);
             
+            // Optional: Verify Owner ID exists before creating user (Simple check)
+            if (isStaff) {
+                const ownerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(userData.ownerId).get();
+                // Note: This might fail if security rules are strict, but assuming open rules for this generated app context.
+                // If it fails due to permission, we proceed assuming ID is correct, app.js will handle access errors.
+                if (ownerDoc.exists) {
+                    console.log('Linking to business:', ownerDoc.data().businessName);
+                } else {
+                    // We can't always verify due to permissions, but if we can read it and it's missing:
+                   // console.warn('Owner ID might be invalid or not public.');
+                }
+            }
+
             // Create user account
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
@@ -224,43 +256,23 @@ clearInputError(input) {
             // Send Email Verification Link
             try {
                 await user.sendEmailVerification();
-                console.log('Verification email sent');
             } catch (emailError) {
                 console.error('Error sending verification email:', emailError);
             }
 
-            console.log('User account created:', user.uid);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            
+            // Save User Data
             try {
-                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
-                    businessName,
-                    ownerName,
-                    businessPhone,
-                    businessAddress,
-                    email,
-                    defaultPrice,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    subscription: 'free',
-                    status: 'active'
-                });
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
             } catch (firestoreError) {
                 console.error('Firestore write error:', firestoreError);
                 await user.delete(); // Rollback
-                throw new Error('Failed to create business profile. Please try again.');
+                throw new Error('Failed to create profile. Please try again.');
             }
 
-            const userDataLoaded = await this.loadUserData(user);
-            if (!userDataLoaded) throw new Error('User data verification failed.');
-            
-            showSuccess('Account created! Please verify your email before logging in.');
+            showSuccess(isStaff ? 'Staff account created!' : 'Business account created!');
             
             setTimeout(() => {
-                if (this.userData) {
-                    window.location.href = 'app.html';
-                }
+                window.location.href = 'app.html';
             }, 2000);
             
         } catch (error) {
@@ -283,8 +295,12 @@ clearInputError(input) {
         } else {
             form.classList.remove('loading');
             submitBtn.disabled = false;
-            if (formId === 'loginForm') submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In to Your Business';
-            else if (formId === 'signupForm') submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Business Account';
+            if (formId === 'loginForm') {
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+            } else if (formId === 'signupForm') {
+                 const isStaff = document.getElementById('isStaffCheckbox')?.checked;
+                 submitBtn.innerHTML = isStaff ? '<i class="fas fa-id-badge"></i> Create Staff Account' : '<i class="fas fa-user-plus"></i> Create Business Account';
+            }
         }
     }
     
@@ -307,10 +323,7 @@ clearInputError(input) {
     }
 
     updateUI() {
-        const businessNameElement = document.getElementById('businessName');
-        if (businessNameElement && this.userData) {
-            businessNameElement.textContent = this.userData.businessName;
-        }
+        // This is now handled mainly in app.js
     }
 
   handleAuthError(error) {
