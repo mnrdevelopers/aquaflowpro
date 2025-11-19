@@ -578,6 +578,11 @@ class StaffApp {
         this.showModal('scannerModal');
     }
 
+    closeScanner() {
+        this.closeModal('scannerModal');
+        this.stopScanner();
+    }
+
     async confirmDelivery() {
         // Similar to main app but with staff tracking
         if (!this.currentCustomerId) {
