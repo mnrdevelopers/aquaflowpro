@@ -68,7 +68,7 @@ class AquaFlowApp {
         
         if (!user) {
             console.log('No user found, redirecting to auth.html');
-            window.location.href = 'auth.html';
+            window.location.replace('auth.html');
             return false;
         }
         
