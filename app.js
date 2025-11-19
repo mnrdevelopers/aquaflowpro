@@ -542,6 +542,25 @@ class AquaFlowApp {
         }
     }
 
+    // NEW METHOD: Edit Customer (Was Missing)
+    editCustomer(customerId) {
+        const customer = this.customers.find(c => c.id === customerId);
+        if (!customer) {
+            showError('Customer not found');
+            return;
+        }
+
+        // Populate edit form
+        document.getElementById('editCustomerId').value = customer.id;
+        document.getElementById('editCustomerName').value = customer.name;
+        document.getElementById('editCustomerPhone').value = customer.phone;
+        document.getElementById('editCustomerAddress').value = customer.address;
+        document.getElementById('editCustomerType').value = customer.type || 'home';
+        document.getElementById('editCustomerPrice').value = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
+
+        this.showModal('editCustomerModal');
+    }
+
     async updateCustomer(e) {
         e.preventDefault();
         
@@ -703,6 +722,69 @@ class AquaFlowApp {
             console.error('Error generating QR code:', error);
             throw error;
         }
+    }
+    
+    // NEW METHOD: View/Print Generated QR Code (Was Missing)
+    async generateCustomerQR(customerId) {
+        try {
+            const customer = this.customers.find(c => c.id === customerId);
+            if (!customer) {
+                showError('Customer not found.');
+                return;
+            }
+            
+            if (!customer.qrCodeUrl) {
+                // Try to generate it if missing
+                if(confirm("QR Code not generated yet. Generate now?")) {
+                     await this.generateAndStoreQRCode(customerId, customer);
+                     // Reload data to get URL
+                     await this.loadCustomers();
+                     const updatedCustomer = this.customers.find(c => c.id === customerId);
+                     if(updatedCustomer && updatedCustomer.qrCodeUrl) {
+                         this.printQRWindow(updatedCustomer);
+                     }
+                }
+                return;
+            }
+
+            this.printQRWindow(customer);
+            
+        } catch (error) {
+            console.error('Error displaying QR code:', error);
+            showError('Failed to display QR code.');
+        }
+    }
+
+    printQRWindow(customer) {
+        const qrWindow = window.open('', '_blank');
+        if(!qrWindow) {
+             showError('Pop-up blocked. Please allow pop-ups to print QR code.');
+             return;
+        }
+        qrWindow.document.write(`
+            <html>
+                <head>
+                    <title>QR Code - ${customer.name}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 2rem; }
+                        img { max-width: 100%; border: 2px solid #333; padding: 1rem; }
+                        .btn { background: #0066ff; color: white; padding: 10px 20px; border: none; cursor: pointer; font-size: 16px; margin-top: 20px; border-radius: 5px; }
+                        .info { margin-bottom: 20px; color: #666; }
+                    </style>
+                </head>
+                <body>
+                    <h2>${customer.name}</h2>
+                    <div class="info">
+                        <p>Phone: ${customer.phone}</p>
+                        <p>Address: ${customer.address}</p>
+                    </div>
+                    <img src="${customer.qrCodeUrl}" alt="QR Code">
+                    <br>
+                    <button class="btn" onclick="window.print()">Print QR Code</button>
+                </body>
+            </html>
+        `);
+        qrWindow.document.close();
     }
 
     loadCustomerSelect() {
