@@ -679,86 +679,21 @@ class AquaFlowApp {
     async generateAndStoreQRCode(customerId, customerData) {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
             const qrData = `AQUAFLOW:${customerId}:${this.userId}`;
             
-            // 1. Generate raw QR code on a temporary canvas
-            const qrCanvas = document.createElement('canvas');
+            const canvas = document.createElement('canvas');
             if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
                 console.warn('QRCode library not loaded.');
                 return;
             }
             
-            await QRCode.toCanvas(qrCanvas, qrData, {
-                width: 250,
-                margin: 1,
+            await QRCode.toCanvas(canvas, qrData, {
+                width: 300,
+                margin: 2,
                 color: { dark: '#000000', light: '#FFFFFF' }
             });
 
-            // 2. Create the premium design canvas
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const width = 400;
-            const height = 550;
-            canvas.width = width;
-            canvas.height = height;
-
-            // Background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
-            
-            // Gradient Header
-            const gradient = ctx.createLinearGradient(0, 0, width, 0);
-            gradient.addColorStop(0, '#0066ff');
-            gradient.addColorStop(1, '#0047b3');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, 100);
-
-            // Business Name
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 24px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const businessName = this.userData?.businessName || 'AquaFlow Pro';
-            ctx.fillText(businessName, width / 2, 50);
-
-            // Subtitle
-            ctx.fillStyle = '#e6f0ff';
-            ctx.font = '14px Arial, sans-serif';
-            ctx.fillText('Water Delivery Service', width / 2, 75);
-
-            // Draw QR Code container background/shadow
-            ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 5;
-            ctx.fillRect(50, 130, 300, 300);
-            ctx.shadowColor = 'transparent'; // Reset shadow
-
-            // Draw Border around QR placeholder
-            ctx.strokeStyle = '#e9ecef';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(50, 130, 300, 300);
-
-            // Draw the QR code image from the temp canvas
-            ctx.drawImage(qrCanvas, 75, 155, 250, 250);
-
-            // Customer Name Footer
-            ctx.fillStyle = '#333333';
-            ctx.font = 'bold 18px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(customerData.name, width / 2, 460);
-
-            // Footer Instruction
-            ctx.fillStyle = '#666666';
-            ctx.font = '14px Arial, sans-serif';
-            ctx.fillText('Scan to record delivery', width / 2, 490);
-            
-            // Bottom accent line
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, height - 10, width, 10);
-
-            // 3. Convert final canvas to blob and upload
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             const apiKey = await getImgBBApiKey();
             
@@ -826,53 +761,26 @@ class AquaFlowApp {
              showError('Pop-up blocked. Please allow pop-ups to print QR code.');
              return;
         }
-        
-        // Updated print window to simply show the premium image
         qrWindow.document.write(`
             <html>
                 <head>
                     <title>QR Code - ${customer.name}</title>
                     <style>
-                        body { 
-                            font-family: Arial, sans-serif; 
-                            text-align: center; 
-                            padding: 20px; 
-                            background: #f0f2f5;
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                            min-height: 100vh;
-                        }
-                        .card-preview {
-                            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-                            max-width: 100%;
-                            border-radius: 8px;
-                            overflow: hidden;
-                        }
-                        .btn-print { 
-                            background: #0066ff; 
-                            color: white; 
-                            padding: 12px 24px; 
-                            border: none; 
-                            cursor: pointer; 
-                            font-size: 16px; 
-                            margin-top: 30px; 
-                            border-radius: 6px; 
-                            font-weight: bold;
-                            box-shadow: 0 4px 6px rgba(0,102,255,0.3);
-                            transition: transform 0.2s;
-                        }
-                        .btn-print:hover { transform: translateY(-2px); }
-                        @media print {
-                            body { background: white; padding: 0; }
-                            .btn-print { display: none; }
-                            .card-preview { box-shadow: none; }
-                        }
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 2rem; }
+                        img { max-width: 100%; border: 2px solid #333; padding: 1rem; }
+                        .btn { background: #0066ff; color: white; padding: 10px 20px; border: none; cursor: pointer; font-size: 16px; margin-top: 20px; border-radius: 5px; }
+                        .info { margin-bottom: 20px; color: #666; }
                     </style>
                 </head>
                 <body>
-                    <img src="${customer.qrCodeUrl}" alt="QR Code Card" class="card-preview">
-                    <button class="btn-print" onclick="window.print()">Print QR Card</button>
+                    <h2>${customer.name}</h2>
+                    <div class="info">
+                        <p>Phone: ${customer.phone}</p>
+                        <p>Address: ${customer.address}</p>
+                    </div>
+                    <img src="${customer.qrCodeUrl}" alt="QR Code">
+                    <br>
+                    <button class="btn" onclick="window.print()">Print QR Code</button>
                 </body>
             </html>
         `);
