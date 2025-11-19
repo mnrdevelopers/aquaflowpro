@@ -155,7 +155,7 @@ class AquaFlowApp {
             const currentMonth = getCurrentMonth();
             
             const snapshot = await deliveriesCollectionRef
-                // .where('month', '==', currentMonth) // Removed to allow editing past mistakes if they appear in list
+                // .where('month', '==', currentMonth) 
                 .orderBy('timestamp', 'desc')
                 .limit(500) 
                 .get();
@@ -542,7 +542,7 @@ class AquaFlowApp {
     }
 
     // ==========================================
-    // CUSTOMER MANAGEMENT (Unchanged Logic)
+    // CUSTOMER MANAGEMENT
     // ==========================================
 
     displayCustomers() {
@@ -1562,7 +1562,7 @@ class AquaFlowApp {
                                 <i class="fas fa-check"></i> Mark Paid
                             </button>`
                         }
-                        <button class="btn" style="background-color: #25D366; color: white;" onclick="app.sendWhatsAppReminder('${bill.customerId}', '${bill.month}', ${bill.totalAmount}, ${bill.totalCans})" title="Send WhatsApp Reminder">
+                         <button class="btn" style="background-color: #25D366; color: white;" onclick="app.sendWhatsAppReminder('${bill.customerId}', '${bill.month}', ${bill.totalAmount}, ${bill.totalCans})" title="Send WhatsApp Reminder">
                             <i class="fab fa-whatsapp"></i> Remind
                         </button>
                         <button class="btn btn-secondary" onclick="printBill('${bill.customerId}', '${bill.month}')">
@@ -1587,31 +1587,45 @@ class AquaFlowApp {
             return;
         }
 
-        // Format phone number (strip non-digits)
-        let phone = customer.phone.replace(/\D/g, '');
+        // Robust Phone Number Formatting
+        let phone = customer.phone.replace(/\D/g, ''); // Remove non-digits
+        
+        // Remove leading zero if present (e.g., 09876543210 -> 9876543210)
+        if (phone.startsWith('0')) {
+            phone = phone.substring(1);
+        }
+        
+        // Add country code (India default) if missing (e.g., 9876543210 -> 919876543210)
         if (phone.length === 10) {
-            phone = '91' + phone; // Assume India if no country code
+            phone = '91' + phone;
+        }
+        
+        // Basic validation
+        if (phone.length < 10) {
+             showError('Invalid phone number format for WhatsApp.');
+             return;
         }
 
         const businessName = this.userData.businessName || 'AquaFlow Pro';
         const note = `Water Bill ${month}`;
         
-        // Generate UPI Link
-        // Format: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR&tn=NOTE
+        // Construct UPI Link
         const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(businessName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
         
         // Create Message
         const message = `Hello ${customer.name},
 Your water delivery bill for ${month} is *₹${amount}* (${totalCans} cans).
 
-Please pay using this UPI link:
+*Pay Now:*
 ${upiLink}
 
 Thank you,
 ${businessName}`;
 
-        // Open WhatsApp
-        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        // Use api.whatsapp.com for better cross-platform compatibility
+        const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+        
+        // Open in new tab
         window.open(whatsappUrl, '_blank');
     }
 
