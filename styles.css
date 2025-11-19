@@ -1489,3 +1489,45 @@ textarea.form-input {
 .notification-item.loading {
     animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* Staff Management Styles */
+.staff-members-section {
+    margin-top: var(--space-lg);
+}
+
+.staff-members-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.staff-member-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md);
+    background: var(--gray-100);
+    border-radius: var(--radius-md);
+    border-left: 4px solid var(--primary);
+}
+
+.staff-info .staff-name {
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: var(--space-xs);
+}
+
+.staff-info .staff-email {
+    font-size: 0.9rem;
+    color: var(--gray-600);
+    margin-bottom: var(--space-xs);
+}
+
+.staff-info .staff-join-date {
+    font-size: 0.8rem;
+    color: var(--gray-500);
+}
+
+.staff-actions {
+    flex-shrink: 0;
+}
