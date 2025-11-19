@@ -2,8 +2,9 @@
 class AquaFlowApp {
     constructor() {
         this.customers = [];
-        this.filteredCustomers = []; // New: Separate array for filtering/pagination
+        this.filteredCustomers = [];
         this.deliveries = [];
+        this.filteredDeliveries = []; // For the delivery list view
         this.notifications = [];
         this.payments = []; 
         this.currentView = 'dashboard';
@@ -16,6 +17,7 @@ class AquaFlowApp {
         // Pagination State
         this.currentPage = 1;
         this.itemsPerPage = 10;
+        this.deliveryPage = 1; // Pagination for deliveries view
 
         this.init();
     }
@@ -23,7 +25,6 @@ class AquaFlowApp {
     async init() {
         console.log('App initialization started');
         
-        // CRITICAL FIX: Wait for auth state to be ready
         await this.waitForAuthState();
         
         const authDataReady = await this.checkAuthentication();
@@ -41,7 +42,7 @@ class AquaFlowApp {
 
     async waitForAuthState() {
         let attempts = 0;
-        const maxAttempts = 50; // 5 seconds max wait
+        const maxAttempts = 50; 
         
         while (!authManager.isAuthStateReady() && attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -60,7 +61,6 @@ class AquaFlowApp {
         console.log('Auth check - User:', user ? 'present' : 'absent', 'UserData:', this.userData ? 'loaded' : 'missing');
         
         if (!user) {
-            // User is definitely signed out
             console.log('No user found, redirecting to auth.html');
             window.location.href = 'auth.html';
             return false;
@@ -68,8 +68,6 @@ class AquaFlowApp {
         
         this.userId = user.uid;
         
-        // CRITICAL FIX: More tolerant approach - if userData is missing but user exists,
-        // try to load it directly instead of immediately failing
         if (!this.userData) {
             console.log('User data missing, attempting to load directly...');
             await authManager.loadUserData(user);
@@ -77,7 +75,6 @@ class AquaFlowApp {
             
             if (!this.userData) {
                 console.error('CRITICAL: User is signed in, but user data is unavailable even after reload. User ID:', this.userId);
-                // Instead of blocking completely, use safe defaults and continue
                 this.userData = {
                     businessName: 'AquaFlow Pro',
                     defaultPrice: 20
@@ -105,7 +102,6 @@ class AquaFlowApp {
     }
 
     async loadInitialData() {
-        // Use Promise.all to load data concurrently and provide better user experience
         await Promise.all([
             this.loadCustomers(),
             this.loadCurrentMonthDeliveries(), 
@@ -113,7 +109,6 @@ class AquaFlowApp {
             this.loadPayments() 
         ]);
         this.updateDashboard();
-        
         console.log('App initialization complete.');
     }
 
@@ -136,7 +131,6 @@ class AquaFlowApp {
                 ...doc.data()
             }));
             
-            // Initialize filtered list with all customers
             this.filteredCustomers = [...this.customers];
 
             this.displayCustomers();
@@ -161,7 +155,7 @@ class AquaFlowApp {
             const currentMonth = getCurrentMonth();
             
             const snapshot = await deliveriesCollectionRef
-                .where('month', '==', currentMonth)
+                // .where('month', '==', currentMonth) // Removed to allow editing past mistakes if they appear in list
                 .orderBy('timestamp', 'desc')
                 .limit(500) 
                 .get();
@@ -170,6 +164,9 @@ class AquaFlowApp {
                 id: doc.id,
                 ...doc.data()
             }));
+            
+            // Initialize filtered deliveries for the new view
+            this.filteredDeliveries = [...this.deliveries];
             
         } catch (error) {
             console.error('Error loading deliveries:', error);
@@ -180,7 +177,6 @@ class AquaFlowApp {
     async loadNotifications() {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            
             if (!this.userId) return;
 
             const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
@@ -238,7 +234,6 @@ class AquaFlowApp {
             };
 
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications').add(notificationData);
-            
             await this.loadNotifications();
             
         } catch (error) {
@@ -279,17 +274,14 @@ class AquaFlowApp {
             const timestamp = notification.timestamp?.toDate ? notification.timestamp.toDate() : new Date();
             const timeAgo = this.getTimeAgo(timestamp);
             
-            const title = notification.title || 'Notification';
-            const message = notification.message || '';
-
             return `
                 <div class="notification-item ${notification.read ? '' : 'unread'}" data-id="${notification.id}">
                     <div class="notification-icon ${notification.type}">
                         <i class="fas fa-${this.getNotificationIcon(notification.type)}"></i>
                     </div>
                     <div class="notification-content">
-                        <h4>${title}</h4>
-                        <p>${message}</p>
+                        <h4>${notification.title || 'Notification'}</h4>
+                        <p>${notification.message || ''}</p>
                         <span class="notification-time">${timeAgo}</span>
                     </div>
                     <div class="notification-actions">
@@ -331,7 +323,228 @@ class AquaFlowApp {
         return date.toLocaleDateString();
     }
 
-    // Customer Management - TABLE VIEW WITH PAGINATION
+    // ==========================================
+    // DELIVERY MANAGEMENT (CRUD)
+    // ==========================================
+
+    displayDeliveries() {
+        const container = document.getElementById('deliveriesListContainer');
+        if (!container) return;
+
+        if (this.filteredDeliveries.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-truck-loading"></i>
+                    <h3>No Deliveries Found</h3>
+                    <p>Scan a QR code or record a delivery to see it here.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const startIndex = (this.deliveryPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const pageDeliveries = this.filteredDeliveries.slice(startIndex, endIndex);
+        const totalPages = Math.ceil(this.filteredDeliveries.length / this.itemsPerPage);
+
+        let html = `
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Qty</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        html += pageDeliveries.map(delivery => {
+            const customer = this.customers.find(c => c.id === delivery.customerId);
+            const customerName = customer ? customer.name : 'Unknown';
+            const date = delivery.timestamp && delivery.timestamp.seconds 
+                ? new Date(delivery.timestamp.seconds * 1000).toLocaleString() 
+                : 'N/A';
+            
+            return `
+                <tr>
+                    <td class="fw-bold">${customerName}</td>
+                    <td class="text-sm text-muted">${date}</td>
+                    <td class="fw-bold">${delivery.quantity} Cans</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline" onclick="app.editDelivery('${delivery.id}')" title="Edit/Delete">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+         if (totalPages > 0) {
+            html += `
+                <div class="pagination-controls">
+                    <button class="btn btn-sm btn-secondary" ${this.deliveryPage === 1 ? 'disabled' : ''} onclick="app.changeDeliveryPage(-1)">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </button>
+                    <span class="page-info">Page ${this.deliveryPage} of ${totalPages}</span>
+                    <button class="btn btn-sm btn-secondary" ${this.deliveryPage >= totalPages ? 'disabled' : ''} onclick="app.changeDeliveryPage(1)">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    filterDeliveries(searchTerm) {
+        if (!searchTerm) {
+            this.filteredDeliveries = [...this.deliveries];
+        } else {
+            const lower = searchTerm.toLowerCase();
+            this.filteredDeliveries = this.deliveries.filter(delivery => {
+                const customer = this.customers.find(c => c.id === delivery.customerId);
+                return customer && customer.name.toLowerCase().includes(lower);
+            });
+        }
+        this.deliveryPage = 1;
+        this.displayDeliveries();
+    }
+
+    changeDeliveryPage(delta) {
+        const totalPages = Math.ceil(this.filteredDeliveries.length / this.itemsPerPage);
+        const newPage = this.deliveryPage + delta;
+        
+        if (newPage >= 1 && newPage <= totalPages) {
+            this.deliveryPage = newPage;
+            this.displayDeliveries();
+            document.getElementById('deliveriesView').scrollTop = 0;
+        }
+    }
+
+    editDelivery(deliveryId) {
+        const delivery = this.deliveries.find(d => d.id === deliveryId);
+        if (!delivery) return;
+
+        const customer = this.customers.find(c => c.id === delivery.customerId);
+        const date = delivery.timestamp && delivery.timestamp.seconds 
+            ? new Date(delivery.timestamp.seconds * 1000).toLocaleString() 
+            : 'N/A';
+
+        document.getElementById('editDeliveryId').value = delivery.id;
+        document.getElementById('editDeliveryCustomerId').value = delivery.customerId;
+        document.getElementById('editDeliveryCustomerName').value = customer ? customer.name : 'Unknown';
+        document.getElementById('editDeliveryDate').value = date;
+        document.getElementById('editDeliveryQuantity').value = delivery.quantity;
+
+        this.showModal('editDeliveryModal');
+    }
+
+    async updateDelivery(e) {
+        e.preventDefault();
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+
+        try {
+            const deliveryId = document.getElementById('editDeliveryId').value;
+            const customerId = document.getElementById('editDeliveryCustomerId').value;
+            const newQuantity = parseInt(document.getElementById('editDeliveryQuantity').value);
+            
+            const deliveryIndex = this.deliveries.findIndex(d => d.id === deliveryId);
+            if (deliveryIndex === -1) throw new Error('Delivery not found');
+
+            const oldQuantity = this.deliveries[deliveryIndex].quantity;
+            const diff = newQuantity - oldQuantity;
+            
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            if (diff !== 0) {
+                // Update Delivery
+                await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').doc(deliveryId).update({
+                    quantity: newQuantity
+                });
+
+                // Update Customer Stats
+                await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update({
+                    totalCans: firebase.firestore.FieldValue.increment(diff)
+                });
+
+                // Update Local Data
+                this.deliveries[deliveryIndex].quantity = newQuantity;
+                const customer = this.customers.find(c => c.id === customerId);
+                if (customer) {
+                    customer.totalCans = (customer.totalCans || 0) + diff;
+                }
+            }
+
+            showSuccess('Delivery updated successfully');
+            this.closeModal('editDeliveryModal');
+            this.filterDeliveries(document.getElementById('deliverySearch').value); // Refresh view
+            this.updateDashboard();
+
+        } catch (error) {
+            console.error('Error updating delivery:', error);
+            showError('Failed to update delivery');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Delivery';
+        }
+    }
+
+    async confirmDeleteDelivery() {
+        if(!confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
+        
+        const deliveryId = document.getElementById('editDeliveryId').value;
+        const customerId = document.getElementById('editDeliveryCustomerId').value;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        try {
+            const delivery = this.deliveries.find(d => d.id === deliveryId);
+            if (!delivery) throw new Error('Delivery not found');
+
+            // Delete Delivery
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').doc(deliveryId).delete();
+
+            // Revert Customer Stats
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update({
+                totalCans: firebase.firestore.FieldValue.increment(-delivery.quantity),
+                totalDeliveries: firebase.firestore.FieldValue.increment(-1)
+            });
+
+            // Update Local Data
+            this.deliveries = this.deliveries.filter(d => d.id !== deliveryId);
+            this.filteredDeliveries = this.filteredDeliveries.filter(d => d.id !== deliveryId);
+            
+            const customer = this.customers.find(c => c.id === customerId);
+            if (customer) {
+                customer.totalCans = Math.max(0, (customer.totalCans || 0) - delivery.quantity);
+                customer.totalDeliveries = Math.max(0, (customer.totalDeliveries || 0) - 1);
+            }
+
+            showSuccess('Delivery deleted successfully');
+            this.closeModal('editDeliveryModal');
+            this.displayDeliveries(); // Refresh view
+            this.updateDashboard();
+
+        } catch (error) {
+            console.error('Error deleting delivery:', error);
+            showError('Failed to delete delivery');
+        }
+    }
+
+    // ==========================================
+    // CUSTOMER MANAGEMENT (Unchanged Logic)
+    // ==========================================
+
     displayCustomers() {
         const container = document.getElementById('customersList');
         if (!container) return;
@@ -350,13 +563,11 @@ class AquaFlowApp {
             return;
         }
 
-        // Pagination Logic
         const startIndex = (this.currentPage - 1) * this.itemsPerPage;
         const endIndex = startIndex + this.itemsPerPage;
         const pageCustomers = this.filteredCustomers.slice(startIndex, endIndex);
         const totalPages = Math.ceil(this.filteredCustomers.length / this.itemsPerPage);
 
-        // Table Generation
         let html = `
             <div class="table-responsive">
                 <table class="data-table">
@@ -414,7 +625,6 @@ class AquaFlowApp {
             </div>
         `;
 
-        // Pagination Controls
         if (totalPages > 0) {
             html += `
                 <div class="pagination-controls">
@@ -432,7 +642,6 @@ class AquaFlowApp {
         container.innerHTML = html;
     }
 
-    // Pagination Handler
     changePage(delta) {
         const totalPages = Math.ceil(this.filteredCustomers.length / this.itemsPerPage);
         const newPage = this.currentPage + delta;
@@ -440,8 +649,6 @@ class AquaFlowApp {
         if (newPage >= 1 && newPage <= totalPages) {
             this.currentPage = newPage;
             this.displayCustomers();
-            
-            // Scroll to top of list gently
             const view = document.getElementById('customersView');
             if(view) view.scrollTop = 0;
         }
@@ -469,8 +676,6 @@ class AquaFlowApp {
                 customer.address.toLowerCase().includes(lower)
             );
         }
-        
-        // Reset to first page on search
         this.currentPage = 1;
         this.displayCustomers();
     }
@@ -498,7 +703,7 @@ class AquaFlowApp {
         }
 
         const submitBtn = e.target.querySelector('button[type="submit"]');
-        if (submitBtn.disabled || submitBtn.classList.contains('disabled')) return; 
+        if (submitBtn.disabled) return; 
 
         const originalText = submitBtn.innerHTML;
         submitBtn.disabled = true;
@@ -508,9 +713,8 @@ class AquaFlowApp {
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').add(customerData);
             customerData.id = docRef.id;
             
-            // Add to arrays
             this.customers.push(customerData);
-            this.filteredCustomers.push(customerData); // Also add to filtered list
+            this.filteredCustomers.push(customerData); 
 
             try {
                 await this.generateAndStoreQRCode(docRef.id, customerData);
@@ -524,9 +728,7 @@ class AquaFlowApp {
             e.target.reset();
             this.closeModal('addCustomerModal');
             
-            // Refresh display (go to last page or stay on current?)
-            // Usually better to reload customer list to show new addition
-            this.filterCustomers(''); // Reset filter
+            this.filterCustomers(''); 
             this.displayCustomers();
             this.loadCustomerSelect();
             this.updateDashboard();
@@ -542,7 +744,6 @@ class AquaFlowApp {
         }
     }
 
-    // NEW METHOD: Edit Customer (Was Missing)
     editCustomer(customerId) {
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) {
@@ -550,7 +751,6 @@ class AquaFlowApp {
             return;
         }
 
-        // Populate edit form
         document.getElementById('editCustomerId').value = customer.id;
         document.getElementById('editCustomerName').value = customer.name;
         document.getElementById('editCustomerPhone').value = customer.phone;
@@ -579,13 +779,11 @@ class AquaFlowApp {
         try {
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update(customerData);
             
-            // Update in main array
             const customerIndex = this.customers.findIndex(c => c.id === customerId);
             if (customerIndex !== -1) {
                 this.customers[customerIndex] = { ...this.customers[customerIndex], ...customerData };
             }
 
-            // Update in filtered array
             const filteredIndex = this.filteredCustomers.findIndex(c => c.id === customerId);
             if (filteredIndex !== -1) {
                 this.filteredCustomers[filteredIndex] = { ...this.filteredCustomers[filteredIndex], ...customerData };
@@ -627,6 +825,7 @@ class AquaFlowApp {
             this.customers = this.customers.filter(c => c.id !== customerId);
             this.filteredCustomers = this.filteredCustomers.filter(c => c.id !== customerId);
             this.deliveries = this.deliveries.filter(d => d.customerId !== customerId);
+            this.filteredDeliveries = this.filteredDeliveries.filter(d => d.customerId !== customerId);
 
             await this.addNotification('Customer Deleted', `Deleted customer: ${customer.name}`, 'warning');
 
@@ -650,9 +849,7 @@ class AquaFlowApp {
             return;
         }
 
-        // Calculate customer statistics
         const customerDeliveries = this.deliveries.filter(d => d.customerId === customerId);
-        // Use persisted total if available, else fallback to loaded deliveries
         const totalCans = customer.totalCans || customerDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
         const totalDeliveries = customer.totalDeliveries || customerDeliveries.length;
         
@@ -660,7 +857,6 @@ class AquaFlowApp {
         const monthlyDeliveries = customerDeliveries.filter(d => d.month === currentMonth);
         const monthlyCans = monthlyDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
 
-        // Populate details modal
         document.getElementById('detailCustomerName').textContent = customer.name;
         document.getElementById('detailCustomerPhone').textContent = customer.phone;
         document.getElementById('detailCustomerAddress').textContent = customer.address;
@@ -670,7 +866,6 @@ class AquaFlowApp {
         document.getElementById('detailTotalCans').textContent = totalCans;
         document.getElementById('detailThisMonth').textContent = `${monthlyCans} cans`;
 
-        // Store customer ID for actions
         document.getElementById('currentCustomerId').value = customerId;
 
         this.showModal('customerDetailsModal');
@@ -681,7 +876,6 @@ class AquaFlowApp {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const qrData = `AQUAFLOW:${customerId}:${this.userId}`;
             
-            // Generate clean QR code (just the code)
             const canvas = document.createElement('canvas');
             if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
                 console.warn('QRCode library not loaded.');
@@ -689,7 +883,7 @@ class AquaFlowApp {
             }
             
             await QRCode.toCanvas(canvas, qrData, {
-                width: 400, // High res for printing
+                width: 400, 
                 margin: 2,
                 color: { dark: '#000000', light: '#FFFFFF' }
             });
@@ -724,7 +918,6 @@ class AquaFlowApp {
         }
     }
     
-    // NEW METHOD: View/Print Generated QR Code (Was Missing)
     async generateCustomerQR(customerId) {
         try {
             const customer = this.customers.find(c => c.id === customerId);
@@ -733,13 +926,10 @@ class AquaFlowApp {
                 return;
             }
             
-            // Always check if we need to regenerate (optional, but good if data changed)
-            // For now, stick to: if missing, generate.
             if (!customer.qrCodeUrl) {
                 if(confirm("QR Code not generated yet. Generate now?")) {
                      showSuccess("Generating QR Code...");
                      await this.generateAndStoreQRCode(customerId, customer);
-                     // Reload data to get URL
                      await this.loadCustomers();
                      const updatedCustomer = this.customers.find(c => c.id === customerId);
                      if(updatedCustomer && updatedCustomer.qrCodeUrl) {
@@ -1030,7 +1220,6 @@ class AquaFlowApp {
     showDeliveryForm(customerId, customer) {
         this.currentCustomerId = customerId;
         
-        // Update all customer details fields
         const customerName = document.getElementById('scannedCustomerName');
         const customerPhone = document.getElementById('scannedCustomerPhone');
         const customerAddress = document.getElementById('scannedCustomerAddress');
@@ -1071,7 +1260,8 @@ class AquaFlowApp {
                 userId: this.userId
             };
 
-            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
+            const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
+            deliveryData.id = docRef.id;
             
             const customerRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(this.currentCustomerId);
             await customerRef.update({
@@ -1085,18 +1275,18 @@ class AquaFlowApp {
                 customer.totalDeliveries = (customer.totalDeliveries || 0) + 1;
             }
 
-            // Also update in filtered array to reflect changes immediately
             const filteredCust = this.filteredCustomers.find(c => c.id === this.currentCustomerId);
             if (filteredCust) {
                 filteredCust.totalCans = (filteredCust.totalCans || 0) + quantity;
             }
 
+            this.deliveries.unshift(deliveryData); // Add to local list for recent display
+            this.filteredDeliveries.unshift(deliveryData);
+
             await this.addNotification('Delivery Recorded', `Delivered ${quantity} can(s) to ${customer?.name || 'customer'}`, 'delivery');
             
             showSuccess(`Delivery recorded: ${quantity} can(s) delivered`);
             this.closeScanner();
-            
-            await this.loadCurrentMonthDeliveries();
             this.updateDashboard();
             this.displayCustomers(); 
             
@@ -1150,7 +1340,6 @@ class AquaFlowApp {
         if (qrReader) qrReader.classList.add('hidden');
     }
 
-    // View Management
     showView(viewName) {
         document.querySelectorAll('.view').forEach(view => {
             view.classList.remove('active');
@@ -1171,9 +1360,14 @@ class AquaFlowApp {
             navItem.classList.add('active');
         }
 
-        // Generate reports if viewing reports
+        // View specific initializations
         if (viewName === 'reports') {
             this.generateReports();
+        }
+        if (viewName === 'deliveries') {
+            this.filteredDeliveries = [...this.deliveries];
+            this.deliveryPage = 1;
+            this.displayDeliveries();
         }
     }
 
@@ -1184,11 +1378,9 @@ class AquaFlowApp {
     }
 
     updateStats() {
-        // Total customers
         const totalCustomersEl = document.getElementById('totalCustomers');
         if (totalCustomersEl) totalCustomersEl.textContent = this.customers.length;
         
-        // Today's deliveries
         const today = new Date().toDateString();
         const todayDeliveries = this.deliveries.filter(d => 
             d.timestamp && new Date(d.timestamp.seconds * 1000).toDateString() === today
@@ -1199,7 +1391,6 @@ class AquaFlowApp {
         const todayDeliveriesEl = document.getElementById('todayDeliveries');
         if (todayDeliveriesEl) todayDeliveriesEl.textContent = todayCans;
         
-        // Monthly revenue
         const currentMonth = getCurrentMonth();
         const monthlyDeliveries = this.deliveries.filter(d => d.month === currentMonth);
         let monthlyRevenue = 0;
