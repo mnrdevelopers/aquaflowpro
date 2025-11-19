@@ -13,9 +13,9 @@
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
 </head>
 <body class="app-page">
     <!-- Header -->
@@ -24,10 +24,12 @@
             <div class="header-left">
                 <div class="business-info">
                     <h1 id="businessName">AquaFlow Pro</h1>
-                    <span id="userRoleBadge" class="badge" style="display:none; font-size: 0.7rem; margin-top: 2px;"></span>
-                    <span class="status-online" id="connectionStatus">
-                        <i class="fas fa-circle"></i> Online
-                    </span>
+                    <div style="display:flex; gap: 8px; align-items: center;">
+                        <span id="userRoleBadge" class="badge" style="display:none;"></span>
+                        <span class="status-online" id="connectionStatus">
+                            <i class="fas fa-circle"></i> Online
+                        </span>
+                    </div>
                 </div>
             </div>
             <div class="header-right">
@@ -38,7 +40,8 @@
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge hidden" id="notificationCount">0</span>
                 </button>
-                <button class="btn btn-icon" onclick="showSettings()">
+                <!-- Settings: Hidden for staff via JS -->
+                <button class="btn btn-icon" onclick="showSettings()" data-role="owner">
                     <i class="fas fa-cog"></i>
                 </button>
                 <button class="btn btn-icon" onclick="logout()" title="Logout">
@@ -58,67 +61,131 @@
     <main class="main-content">
         <!-- Dashboard View -->
         <section id="dashboardView" class="view active">
-            <!-- Stats Overview -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-content">
-                        <div class="stat-number" id="totalCustomers">0</div>
-                        <div class="stat-label">Total Customers</div>
+            
+            <!-- === OWNER DASHBOARD CONTENT === -->
+            <div id="ownerDashboardContent">
+                <h2 class="dashboard-title">Owner Overview</h2>
+                
+                <!-- Stats Overview -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-number" id="totalCustomers">0</div>
+                            <div class="stat-label">Total Customers</div>
+                        </div>
+                        <div class="stat-icon bg-blue">
+                            <i class="fas fa-users"></i>
+                        </div>
                     </div>
-                    <div class="stat-icon">
-                        <i class="fas fa-users"></i>
+                    
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-number" id="todayDeliveries">0</div>
+                            <div class="stat-label">Total Today</div>
+                        </div>
+                        <div class="stat-icon bg-green">
+                            <i class="fas fa-truck-loading"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-number" id="monthlyRevenue">₹0</div>
+                            <div class="stat-label">Revenue (M)</div>
+                        </div>
+                        <div class="stat-icon bg-purple">
+                            <i class="fas fa-rupee-sign"></i>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="stat-card">
-                    <div class="stat-content">
-                        <div class="stat-number" id="todayDeliveries">0</div>
-                        <div class="stat-label">Today's Deliveries</div>
-                    </div>
-                    <div class="stat-icon">
-                        <i class="fas fa-truck-loading"></i>
-                    </div>
-                </div>
-                
-                <div class="stat-card" data-role="owner">
-                    <div class="stat-content">
-                        <div class="stat-number" id="monthlyRevenue">₹0</div>
-                        <div class="stat-label">This Month</div>
-                    </div>
-                    <div class="stat-icon">
-                        <i class="fas fa-rupee-sign"></i>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions-section">
+                    <h3>Quick Actions</h3>
+                    <div class="quick-actions-grid">
+                        <button class="quick-action-btn" onclick="showView('customers')">
+                            <i class="fas fa-user-plus"></i>
+                            <span>Add Customer</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="showView('billing')">
+                            <i class="fas fa-file-invoice"></i>
+                            <span>Generate Bills</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="showView('deliveries')">
+                            <i class="fas fa-list-alt"></i>
+                            <span>View All Deliveries</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="showView('reports')">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Business Reports</span>
+                        </button>
                     </div>
                 </div>
             </div>
+            <!-- === END OWNER DASHBOARD === -->
 
-            <!-- Quick Actions -->
-            <div class="quick-actions-section">
-                <h3>Quick Actions</h3>
-                <div class="quick-actions-grid">
-                    <button class="quick-action-btn" onclick="showView('customers')">
-                        <i class="fas fa-user-plus"></i>
-                        Add Customer
+            <!-- === STAFF DASHBOARD CONTENT === -->
+            <div id="staffDashboardContent" class="hidden">
+                <div class="staff-welcome">
+                    <h2>Hello, <span id="staffNameDisplay">Staff</span>! 👋</h2>
+                    <p>Ready for your delivery route?</p>
+                </div>
+
+                <!-- Staff Stats -->
+                <div class="stats-grid staff-stats">
+                    <div class="stat-card highlight-card">
+                        <div class="stat-content">
+                            <div class="stat-number" id="staffTodayDeliveries">0</div>
+                            <div class="stat-label">My Deliveries Today</div>
+                        </div>
+                        <div class="stat-icon bg-primary">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-content">
+                            <div class="stat-number" id="staffTotalCans">0</div>
+                            <div class="stat-label">Cans Delivered Today</div>
+                        </div>
+                        <div class="stat-icon bg-info">
+                            <i class="fas fa-tint"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Massive Action Button -->
+                <div class="hero-action-section">
+                    <button class="btn-hero-scan" onclick="openScanner()">
+                        <div class="hero-icon">
+                            <i class="fas fa-qrcode"></i>
+                        </div>
+                        <div class="hero-text">
+                            <span class="hero-title">Scan & Deliver</span>
+                            <span class="hero-subtitle">Record a delivery instantly</span>
+                        </div>
+                        <div class="hero-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
                     </button>
-                    <button class="quick-action-btn" onclick="showView('billing')" data-role="owner">
-                        <i class="fas fa-file-invoice"></i>
-                        Generate Bills
+                </div>
+
+                <!-- Secondary Staff Actions -->
+                <div class="staff-actions-row">
+                    <button class="btn btn-outline btn-block" onclick="showManualCustomerSelect()">
+                        <i class="fas fa-search"></i> Manual Entry
                     </button>
-                    <button class="quick-action-btn" onclick="showView('customers')">
-                        <i class="fas fa-users"></i>
-                        View Customers
-                    </button>
-                    <button class="quick-action-btn" onclick="showView('reports')" data-role="owner">
-                        <i class="fas fa-chart-bar"></i>
-                        Reports
+                    <button class="btn btn-outline btn-block" onclick="showView('customers')">
+                        <i class="fas fa-users"></i> Customer List
                     </button>
                 </div>
             </div>
+            <!-- === END STAFF DASHBOARD === -->
 
-            <!-- Recent Activity -->
+            <!-- Recent Activity (Shared but filtered by logic) -->
             <div class="recent-activity">
                 <div class="section-header">
-                    <h3>Recent Deliveries</h3>
-                    <button class="btn btn-text" onclick="showView('deliveries')">View All</button>
+                    <h3 id="activityTitle">Recent Activity</h3>
+                    <button class="btn btn-text" onclick="showView('deliveries')">View History</button>
                 </div>
                 <div id="recentDeliveriesList" class="activity-list">
                     <!-- Recent deliveries will be loaded here -->
@@ -132,7 +199,7 @@
                 <button class="btn btn-back" onclick="showView('dashboard')">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <h2>Delivery Management</h2>
+                <h2>Delivery History</h2>
             </div>
 
             <!-- Search -->
@@ -156,8 +223,9 @@
                     <i class="fas fa-arrow-left"></i>
                 </button>
                 <h2>Customer Management</h2>
+                <!-- Add Customer: Visible to everyone, but logic may restrict edit -->
                 <button class="btn btn-primary" onclick="showAddCustomerModal()">
-                    <i class="fas fa-plus"></i> Add Customer
+                    <i class="fas fa-plus"></i> Add
                 </button>
             </div>
 
@@ -165,7 +233,7 @@
             <div class="search-section">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="customerSearch" placeholder="Search customers by name, phone, or address...">
+                    <input type="text" id="customerSearch" placeholder="Search customers...">
                 </div>
             </div>
 
@@ -175,7 +243,7 @@
             </div>
         </section>
 
-        <!-- Billing View -->
+        <!-- Billing View (Owner Only) -->
         <section id="billingView" class="view" data-role="owner">
             <div class="view-header">
                 <button class="btn btn-back" onclick="showView('dashboard')">
@@ -208,7 +276,7 @@
             </div>
         </section>
 
-        <!-- Reports View -->
+        <!-- Reports View (Owner Only) -->
         <section id="reportsView" class="view" data-role="owner">
             <div class="view-header">
                 <button class="btn btn-back" onclick="showView('dashboard')">
@@ -220,15 +288,11 @@
             <div class="reports-container">
                 <div class="report-card">
                     <h4>Monthly Performance</h4>
-                    <div id="monthlyReport" class="report-content">
-                        <!-- Monthly report content -->
-                    </div>
+                    <div id="monthlyReport" class="report-content"></div>
                 </div>
                 <div class="report-card">
                     <h4>Top Customers</h4>
-                    <div id="topCustomersReport" class="report-content">
-                        <!-- Top customers list -->
-                    </div>
+                    <div id="topCustomersReport" class="report-content"></div>
                 </div>
             </div>
         </section>
@@ -241,24 +305,22 @@
                 </button>
                 <h2>Notifications</h2>
                 <button class="btn btn-secondary" onclick="clearAllNotifications()">
-                    <i class="fas fa-trash"></i> Clear All
+                    <i class="fas fa-trash"></i> Clear
                 </button>
             </div>
 
-            <div id="notificationsList" class="notifications-list">
-                <!-- Notifications will be loaded here -->
-            </div>
+            <div id="notificationsList" class="notifications-list"></div>
         </section>
     </main>
 
+    <!-- Modals (Add Customer, Edit, QR, etc.) remain mostly same, but structured for single file consistency -->
+    
     <!-- Add Customer Modal -->
     <div id="addCustomerModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Add New Customer</h3>
-                <button class="btn btn-close" onclick="closeModal('addCustomerModal')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button class="btn btn-close" onclick="closeModal('addCustomerModal')"><i class="fas fa-times"></i></button>
             </div>
             <form id="addCustomerForm" onsubmit="addCustomer(event)">
                 <div class="form-group">
@@ -275,7 +337,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="customerType">Customer Type</label>
+                        <label for="customerType">Type</label>
                         <select id="customerType" class="form-input">
                             <option value="home">🏠 Home</option>
                             <option value="shop">🏪 Shop</option>
@@ -285,17 +347,13 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="customerPrice">Price per Can (₹)</label>
+                        <label for="customerPrice">Price (₹)</label>
                         <input type="number" id="customerPrice" class="form-input" value="20" min="1">
                     </div>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('addCustomerModal')">
-                        Cancel
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Customer
-                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addCustomerModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
                 </div>
             </form>
         </div>
@@ -306,9 +364,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Edit Customer</h3>
-                <button class="btn btn-close" onclick="closeModal('editCustomerModal')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button class="btn btn-close" onclick="closeModal('editCustomerModal')"><i class="fas fa-times"></i></button>
             </div>
             <form id="editCustomerForm" onsubmit="updateCustomer(event)">
                 <input type="hidden" id="editCustomerId">
@@ -326,7 +382,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="editCustomerType">Customer Type</label>
+                        <label for="editCustomerType">Type</label>
                         <select id="editCustomerType" class="form-input">
                             <option value="home">🏠 Home</option>
                             <option value="shop">🏪 Shop</option>
@@ -336,17 +392,13 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="editCustomerPrice">Price per Can (₹)</label>
+                        <label for="editCustomerPrice">Price (₹)</label>
                         <input type="number" id="editCustomerPrice" class="form-input" min="1">
                     </div>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('editCustomerModal')">
-                        Cancel
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Update Customer
-                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editCustomerModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update</button>
                 </div>
             </form>
         </div>
@@ -357,37 +409,26 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Edit Delivery</h3>
-                <button class="btn btn-close" onclick="closeModal('editDeliveryModal')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button class="btn btn-close" onclick="closeModal('editDeliveryModal')"><i class="fas fa-times"></i></button>
             </div>
             <form id="editDeliveryForm" onsubmit="app.updateDelivery(event)">
                 <input type="hidden" id="editDeliveryId">
                 <input type="hidden" id="editDeliveryCustomerId">
-                
                 <div class="form-group">
-                    <label>Customer Name</label>
+                    <label>Customer</label>
                     <input type="text" id="editDeliveryCustomerName" class="form-input" readonly style="background-color: var(--gray-100);">
                 </div>
-                
                 <div class="form-group">
-                    <label for="editDeliveryDate">Delivery Date & Time</label>
+                    <label>Date</label>
                     <input type="text" id="editDeliveryDate" class="form-input" readonly style="background-color: var(--gray-100);">
                 </div>
-
                 <div class="form-group">
-                    <label for="editDeliveryQuantity">Number of Cans</label>
+                    <label for="editDeliveryQuantity">Quantity (Cans)</label>
                     <input type="number" id="editDeliveryQuantity" class="form-input" min="1" required>
-                    <p class="text-sm text-muted" style="margin-top: 5px;">Update to correct a mistake.</p>
                 </div>
-                
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-danger" onclick="app.confirmDeleteDelivery()" data-role="owner">
-                        <i class="fas fa-trash"></i> Delete Entry
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Update Delivery
-                    </button>
+                    <button type="button" class="btn btn-danger" onclick="app.confirmDeleteDelivery()" data-role="owner">Delete</button>
+                    <button type="submit" class="btn btn-primary">Update</button>
                 </div>
             </form>
         </div>
@@ -398,56 +439,27 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Customer Details</h3>
-                <button class="btn btn-close" onclick="closeModal('customerDetailsModal')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button class="btn btn-close" onclick="closeModal('customerDetailsModal')"><i class="fas fa-times"></i></button>
             </div>
             <div class="customer-details-content">
                 <div class="detail-section">
-                    <h4>Basic Information</h4>
-                    <div class="detail-item">
-                        <label>Name:</label>
-                        <span id="detailCustomerName">-</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Phone:</label>
-                        <span id="detailCustomerPhone">-</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Address:</label>
-                        <span id="detailCustomerAddress">-</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Type:</label>
-                        <span id="detailCustomerType">-</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Price per Can:</label>
-                        <span id="detailCustomerPrice">-</span>
-                    </div>
+                    <h4>Info</h4>
+                    <div class="detail-item"><label>Name:</label><span id="detailCustomerName">-</span></div>
+                    <div class="detail-item"><label>Phone:</label><span id="detailCustomerPhone">-</span></div>
+                    <div class="detail-item"><label>Address:</label><span id="detailCustomerAddress">-</span></div>
+                    <div class="detail-item"><label>Type:</label><span id="detailCustomerType">-</span></div>
+                    <div class="detail-item"><label>Price:</label><span id="detailCustomerPrice">-</span></div>
                 </div>
                 <div class="detail-section">
-                    <h4>Delivery Statistics</h4>
-                    <div class="detail-item">
-                        <label>Total Deliveries:</label>
-                        <span id="detailTotalDeliveries">0</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Total Cans:</label>
-                        <span id="detailTotalCans">0</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>This Month:</label>
-                        <span id="detailThisMonth">0 cans</span>
-                    </div>
+                    <h4>Stats</h4>
+                    <div class="detail-item"><label>Total Deliveries:</label><span id="detailTotalDeliveries">0</span></div>
+                    <div class="detail-item"><label>Total Cans:</label><span id="detailTotalCans">0</span></div>
+                    <div class="detail-item"><label>This Month:</label><span id="detailThisMonth">0</span></div>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn btn-primary" onclick="editCustomerFromDetails()">
-                        <i class="fas fa-edit"></i> Edit Customer
-                    </button>
-                    <button class="btn btn-danger" onclick="deleteCustomerFromDetails()" data-role="owner">
-                        <i class="fas fa-trash"></i> Delete Customer
-                    </button>
+                    <!-- Only owner can delete, but staff can edit details if needed (or hide edit for staff too via JS) -->
+                    <button class="btn btn-primary" onclick="editCustomerFromDetails()"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-danger" onclick="deleteCustomerFromDetails()" data-role="owner"><i class="fas fa-trash"></i> Delete</button>
                 </div>
             </div>
         </div>
@@ -458,130 +470,107 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Confirm Delete</h3>
-                <button class="btn btn-close" onclick="closeModal('deleteConfirmModal')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button class="btn btn-close" onclick="closeModal('deleteConfirmModal')"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete this customer? This action cannot be undone.</p>
+                <p>Are you sure? This cannot be undone.</p>
                 <p><strong id="deleteCustomerName">-</strong></p>
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('deleteConfirmModal')">
-                    Cancel
-                </button>
-                <button type="button" class="btn btn-danger" onclick="confirmDeleteCustomer()">
-                    <i class="fas fa-trash"></i> Delete Customer
-                </button>
+                <button class="btn btn-secondary" onclick="closeModal('deleteConfirmModal')">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmDeleteCustomer()">Delete</button>
             </div>
         </div>
     </div>
 
-   <!-- QR Scanner Modal -->
-<div id="scannerModal" class="modal hidden">
-    <div class="modal-content scanner-modal">
-        <div class="modal-header">
-            <h3>Scan Customer QR Code</h3>
-            <button class="btn btn-close" onclick="closeScanner()">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="scanner-container">
-            <div id="scannerView" class="scanner-view">
-                <div id="scannerPlaceholder" class="scanner-placeholder">
-                    <i class="fas fa-qrcode"></i>
-                    <p>Position QR code within frame to scan</p>
-                    <button class="btn btn-primary" onclick="initializeScanner()">
-                        Start Camera
-                    </button>
-                </div>
-                <div id="qrReader" style="width: 100%; height: 100%;" class="hidden"></div>
+    <!-- QR Scanner Modal -->
+    <div id="scannerModal" class="modal hidden">
+        <div class="modal-content scanner-modal">
+            <div class="modal-header">
+                <h3>Scan QR</h3>
+                <button class="btn btn-close" onclick="closeScanner()"><i class="fas fa-times"></i></button>
             </div>
-            
-            <div id="deliveryForm" class="delivery-form hidden">
-                <div class="customer-info">
-                    <h4>Customer Details</h4>
-                    <p><strong>Name:</strong> <span id="scannedCustomerName">-</span></p>
-                    <p><strong>Phone:</strong> <span id="scannedCustomerPhone">-</span></p>
-                    <p><strong>Address:</strong> <span id="scannedCustomerAddress">-</span></p>
+            <div class="scanner-container">
+                <div id="scannerView" class="scanner-view">
+                    <div id="scannerPlaceholder" class="scanner-placeholder">
+                        <i class="fas fa-qrcode"></i>
+                        <p>Align QR code within frame</p>
+                        <button class="btn btn-primary" onclick="initializeScanner()">Start Camera</button>
+                        <div style="margin-top: 20px;">
+                             <button class="btn btn-sm btn-outline" onclick="showManualCustomerSelect()">Select from List</button>
+                             <button class="btn btn-sm btn-outline" onclick="showManualQRInput()">Enter Code</button>
+                        </div>
+                    </div>
+                    <div id="qrReader" style="width: 100%; height: 100%;" class="hidden"></div>
                 </div>
-                <div class="form-group">
-                    <label>Number of Cans</label>
-                    <input type="number" id="deliveryQuantity" class="form-input" value="1" min="1">
-                </div>
-                <div class="form-actions">
-                    <button class="btn btn-success" onclick="confirmDelivery()">
-                        <i class="fas fa-check"></i> Confirm Delivery
-                    </button>
-                    <button class="btn btn-secondary" onclick="resetScanner()">
-                        <i class="fas fa-redo"></i> Scan Again
-                    </button>
+                
+                <div id="deliveryForm" class="delivery-form hidden">
+                    <div class="customer-info">
+                        <h4>Delivery For:</h4>
+                        <p><strong id="scannedCustomerName">-</strong></p>
+                        <p class="text-sm text-muted" id="scannedCustomerAddress">-</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Cans Delivered</label>
+                        <div class="quantity-control">
+                             <button type="button" class="btn-qty" onclick="adjustQuantity(-1)">-</button>
+                             <input type="number" id="deliveryQuantity" class="form-input text-center" value="1" min="1" style="font-size: 1.5rem; width: 80px;">
+                             <button type="button" class="btn-qty" onclick="adjustQuantity(1)">+</button>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" onclick="resetScanner()">Cancel</button>
+                        <button class="btn btn-success" onclick="confirmDelivery()"><i class="fas fa-check"></i> Confirm</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
     
     <!-- Settings Modal -->
     <div id="settingsModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Settings</h3>
-                <button class="btn btn-close" onclick="closeModal('settingsModal')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button class="btn btn-close" onclick="closeModal('settingsModal')"><i class="fas fa-times"></i></button>
             </div>
             <div class="settings-content">
                 <form id="settingsForm" onsubmit="saveSettings(event)">
-                    <!-- Owner Only Settings -->
                     <div class="setting-section" data-role="owner">
-                        <h4>Business Information</h4>
+                        <h4>Business Info</h4>
                          <div class="setting-item">
-                            <label>Business ID (Share with Staff)</label>
+                            <label>Business ID (For Staff)</label>
                             <div style="display: flex; gap: 10px;">
                                 <input type="text" id="settingsBusinessId" class="form-input" readonly style="background: var(--gray-100); font-family: monospace;">
-                                <button type="button" class="btn btn-secondary" onclick="copyBusinessId()">
-                                    <i class="fas fa-copy"></i>
-                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="copyBusinessId()"><i class="fas fa-copy"></i></button>
                             </div>
-                            <p class="text-sm text-muted">Staff need this ID to join your business.</p>
                         </div>
                         <div class="setting-item">
                             <label>Business Name</label>
                             <input type="text" id="settingsBusinessName" class="form-input">
                         </div>
                         <div class="setting-item">
-                            <label>Business Contact Number</label>
-                            <input type="tel" id="settingsBusinessPhone" class="form-input" placeholder="Phone number shown in messages">
-                            <p class="text-sm text-muted" style="margin-top: 5px;">This number will be included in WhatsApp reminders.</p>
+                            <label>Contact Phone</label>
+                            <input type="tel" id="settingsBusinessPhone" class="form-input">
                         </div>
                         <div class="setting-item">
-                            <label>Default Price per Can (₹)</label>
+                            <label>Default Price (₹)</label>
                             <input type="number" id="settingsDefaultPrice" class="form-input" min="1">
                         </div>
                     </div>
-
                     <hr style="border: 0; border-top: 1px solid #e9ecef; margin: 20px 0;">
-
                     <div class="setting-section">
                         <h4>Security</h4>
                         <div class="setting-item">
-                            <label>Change Password</label>
-                            <input type="password" id="newPassword" class="form-input" placeholder="New Password" style="margin-bottom: 10px;">
-                            <input type="password" id="confirmNewPassword" class="form-input" placeholder="Confirm New Password">
-                            <button type="button" class="btn btn-outline" onclick="app.changePassword()" style="margin-top: 10px; width: 100%;">
-                                <i class="fas fa-key"></i> Update Password
-                            </button>
+                            <label>New Password</label>
+                            <input type="password" id="newPassword" class="form-input" placeholder="New Password">
+                            <input type="password" id="confirmNewPassword" class="form-input" placeholder="Confirm" style="margin-top:5px;">
+                            <button type="button" class="btn btn-outline" onclick="app.changePassword()" style="margin-top: 10px; width: 100%;">Update Password</button>
                         </div>
                     </div>
-
                     <div class="modal-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('settingsModal')">
-                            Cancel
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Save Changes
-                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary" data-role="owner">Save Changes</button>
                     </div>
                 </form>
             </div>
@@ -590,7 +579,7 @@
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
-        <button class="nav-item" onclick="showView('dashboard')">
+        <button class="nav-item active" onclick="showView('dashboard')">
             <i class="fas fa-home"></i>
             <span>Home</span>
         </button>
@@ -607,6 +596,7 @@
             </button>
         </div>
         
+        <!-- Owner Items (Hidden via CSS for staff) -->
         <button class="nav-item" onclick="showView('billing')" data-role="owner">
             <i class="fas fa-file-invoice"></i>
             <span>Billing</span>
@@ -616,30 +606,37 @@
             <i class="fas fa-chart-bar"></i>
             <span>Reports</span>
         </button>
+        
+        <!-- Staff alternative Items (Hidden via CSS for owner) -->
+        <button class="nav-item" onclick="showView('deliveries')" data-role="staff" style="display:none;">
+            <i class="fas fa-history"></i>
+            <span>History</span>
+        </button>
     </nav>
 
     <!-- Hidden Fields -->
     <input type="hidden" id="currentCustomerId">
     <input type="hidden" id="customerToDelete">
 
-    <!-- Firebase Configuration -->
+    <!-- Scripts -->
     <script src="firebase-config.js"></script>
     <script src="auth.js"></script>
     <script src="app.js"></script>
-    
-    <!-- QR Code Generation Library -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
     
     <script>
+        // Global helper functions to bridge HTML onclicks to App class
         function copyBusinessId() {
             const input = document.getElementById('settingsBusinessId');
             input.select();
             document.execCommand('copy');
-            // Simple feedback
-            const btn = input.nextElementSibling;
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check"></i>';
-            setTimeout(() => btn.innerHTML = original, 2000);
+            showSuccess('Copied!');
+        }
+        function adjustQuantity(delta) {
+            const input = document.getElementById('deliveryQuantity');
+            let val = parseInt(input.value) || 1;
+            val = Math.max(1, val + delta);
+            input.value = val;
         }
     </script>
 </body>
