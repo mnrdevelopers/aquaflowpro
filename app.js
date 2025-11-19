@@ -1162,6 +1162,37 @@ class AquaFlowApp {
         results.classList.remove('hidden');
     }
 
+    // NEW METHOD: Save settings to Firestore
+    async saveSettings(e) {
+        e.preventDefault();
+        const businessName = document.getElementById('settingsBusinessName').value;
+        const defaultPrice = parseInt(document.getElementById('settingsDefaultPrice').value);
+
+        try {
+             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).update({
+                 businessName,
+                 defaultPrice,
+                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+             });
+             
+             // Update local state
+             if (this.userData) {
+                 this.userData.businessName = businessName;
+                 this.userData.defaultPrice = defaultPrice;
+             } else {
+                 this.userData = { businessName, defaultPrice };
+             }
+             
+             this.updateUI();
+             this.closeModal('settingsModal');
+             showSuccess('Settings saved successfully');
+        } catch(error) {
+            console.error(error);
+            showError('Failed to save settings');
+        }
+    }
+
     // Utility Functions
     showModal(modalId) {
         const modal = document.getElementById(modalId);
@@ -1457,9 +1488,13 @@ function deleteCustomerFromDetails() {
     deleteCustomer(customerId);
 }
 
-// Notifications Functions
+// Notifications Functions - UPDATED TO FIX VIEW BUG
 function showNotifications() {
-    if (app) app.showView('notificationsView');
+    if (app) {
+        // FIX: Pass 'notifications' instead of 'notificationsView' to avoid double 'View' suffix
+        app.showView('notifications'); 
+        app.loadNotifications(); // Refresh data when opening
+    }
 }
 
 async function markNotificationAsRead(notificationId) {
@@ -1548,6 +1583,11 @@ function showAllDeliveries() {
 
 function showSettings() {
     if (app) app.showModal('settingsModal');
+}
+
+// GLOBAL FUNCTION FOR SAVING SETTINGS
+function saveSettings(e) {
+    if (app) app.saveSettings(e);
 }
 
 function logout() {
