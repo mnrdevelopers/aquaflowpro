@@ -194,51 +194,33 @@ clearInputError(input) {
    async handleSignup(e) {
         e.preventDefault();
         
-        const isStaff = document.getElementById('isStaffCheckbox').checked;
         const email = document.getElementById('signupEmail').value;
         const password = document.getElementById('signupPassword').value;
         const ownerName = document.getElementById('ownerName').value;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
-        // Prepare Data object based on role
+        // Business Owner Validation
+        const businessName = document.getElementById('businessName').value;
+        const businessPhone = document.getElementById('businessPhone').value;
+        const businessAddress = document.getElementById('businessAddress').value;
+        const defaultPrice = parseInt(document.getElementById('defaultPrice').value) || 20;
+
+        // Prepare Data object - simplified, no staff roles
         let userData = {
             email,
             ownerName,
+            businessName,
+            businessPhone,
+            businessAddress,
+            defaultPrice,
+            subscription: 'free',
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             status: 'active'
         };
-
-        if (isStaff) {
-            // Staff Validation
-            const businessOwnerId = document.getElementById('businessOwnerId').value.trim();
-            if (!businessOwnerId) {
-                this.showInputError(document.getElementById('businessOwnerId'), 'Business Owner ID is required');
-                return;
-            }
-            userData.role = 'staff';
-            userData.ownerId = businessOwnerId;
-            // Note: Staff inherits business details from the ownerId when loaded in app.js
-        } else {
-            // Business Owner Validation
-            const businessName = document.getElementById('businessName').value;
-            const businessPhone = document.getElementById('businessPhone').value;
-            const businessAddress = document.getElementById('businessAddress').value;
-            const defaultPrice = parseInt(document.getElementById('defaultPrice').value) || 20;
-
-            userData.role = 'owner';
-            userData.businessName = businessName;
-            userData.businessPhone = businessPhone;
-            userData.businessAddress = businessAddress;
-            userData.defaultPrice = defaultPrice;
-            userData.subscription = 'free';
-        }
         
         try {
             this.setFormLoading('signupForm', true);
             
-            // Removed the pre-signup DB check for ownerId here because 
-            // unauthenticated users don't have permission to read other users' data.
-
             // Create user account
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
@@ -252,7 +234,7 @@ clearInputError(input) {
 
             // Save User Data
             try {
-                // Write own user document (allowed because auth.uid matches doc path)
+                // Write own user document
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
             } catch (firestoreError) {
                 console.error('Firestore write error:', firestoreError);
@@ -260,7 +242,7 @@ clearInputError(input) {
                 throw new Error('Failed to create profile. Please try again.');
             }
 
-            showSuccess(isStaff ? 'Staff account created!' : 'Business account created!');
+            showSuccess('Business account created!');
             
             setTimeout(() => {
                 window.location.href = 'app.html';
@@ -289,8 +271,7 @@ clearInputError(input) {
             if (formId === 'loginForm') {
                 submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
             } else if (formId === 'signupForm') {
-                 const isStaff = document.getElementById('isStaffCheckbox')?.checked;
-                 submitBtn.innerHTML = isStaff ? '<i class="fas fa-id-badge"></i> Create Staff Account' : '<i class="fas fa-user-plus"></i> Create Business Account';
+                 submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Business Account';
             }
         }
     }
