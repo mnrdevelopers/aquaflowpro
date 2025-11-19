@@ -2,7 +2,9 @@
 class StaffApp {
     constructor() {
         this.customers = [];
+        this.filteredCustomers = [];
         this.deliveries = [];
+        this.filteredDeliveries = [];
         this.notifications = [];
         this.currentView = 'dashboard';
         this.scannerActive = false;
@@ -16,6 +18,7 @@ class StaffApp {
         this.html5QrCode = null;
         this.currentPage = 1;
         this.itemsPerPage = 10;
+        this.deliveryPage = 1;
 
         this.init();
     }
@@ -130,6 +133,7 @@ class StaffApp {
                 ...doc.data()
             }));
             
+            this.filteredCustomers = [...this.customers];
             this.displayCustomers();
             
         } catch (error) {
@@ -154,6 +158,8 @@ class StaffApp {
                 id: doc.id,
                 ...doc.data()
             }));
+            
+            this.filteredDeliveries = [...this.deliveries];
             
         } catch (error) {
             console.error('Error loading deliveries:', error);
@@ -182,6 +188,131 @@ class StaffApp {
         } catch (error) {
             console.error('Error loading notifications:', error);
         }
+    }
+
+    async addNotification(title, message, type = 'info') {
+         try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            
+            const notificationData = {
+                title: title,
+                message: message,
+                type: type,
+                read: false,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: this.authUserId
+            };
+
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications').add(notificationData);
+            await this.loadNotifications();
+            
+        } catch (error) {
+            console.error('Error adding notification:', error);
+        }
+    }
+
+    async clearAllNotifications() {
+        if (!confirm('Are you sure you want to clear all notifications?')) return;
+
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
+            const snapshot = await notificationsRef.get();
+
+            const batch = db.batch();
+            snapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+
+            await batch.commit();
+            await this.loadNotifications();
+            showSuccess('All notifications cleared');
+        } catch (error) {
+            console.error('Error clearing notifications:', error);
+            showError('Failed to clear notifications');
+        }
+    }
+    
+    updateNotificationBadge() {
+        const unreadCount = this.notifications.filter(notification => !notification.read).length;
+        const badge = document.getElementById('notificationCount');
+        
+        if (badge) {
+            if (unreadCount > 0) {
+                badge.textContent = unreadCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    }
+
+    displayNotifications() {
+        const container = document.getElementById('notificationsList');
+        if (!container) return;
+
+        if (this.notifications.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-bell-slash"></i>
+                    <h3>No Notifications</h3>
+                    <p>You're all caught up!</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = this.notifications.map(notification => {
+            const timestamp = notification.timestamp?.toDate ? notification.timestamp.toDate() : new Date();
+            const timeAgo = this.getTimeAgo(timestamp);
+            
+            return `
+                <div class="notification-item ${notification.read ? '' : 'unread'}" data-id="${notification.id}">
+                    <div class="notification-icon ${notification.type}">
+                        <i class="fas fa-${this.getNotificationIcon(notification.type)}"></i>
+                    </div>
+                    <div class="notification-content">
+                        <h4>${notification.title || 'Notification'}</h4>
+                        <p>${notification.message || ''}</p>
+                        <span class="notification-time">${timeAgo}</span>
+                    </div>
+                    <div class="notification-actions">
+                        ${!notification.read ? `
+                            <button class="btn btn-icon" onclick="markNotificationAsRead('${notification.id}')" title="Mark as read">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-icon" onclick="deleteNotification('${notification.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    getNotificationIcon(type) {
+        const icons = {
+            'info': 'info-circle',
+            'success': 'check-circle',
+            'warning': 'exclamation-triangle',
+            'error': 'exclamation-circle',
+            'delivery': 'truck',
+            'payment': 'rupee-sign'
+        };
+        return icons[type] || 'bell';
+    }
+
+    getTimeAgo(date) {
+        if (!date) return '';
+        const now = new Date();
+        const diffInSeconds = Math.floor((now - date) / 1000);
+        
+        if (diffInSeconds < 60) return 'Just now';
+        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+        if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+        return date.toLocaleDateString();
     }
 
     // Staff-specific dashboard updates
@@ -248,7 +379,7 @@ class StaffApp {
         const container = document.getElementById('customersList');
         if (!container) return;
 
-        if (this.customers.length === 0) {
+        if (this.filteredCustomers.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-users"></i>
@@ -261,7 +392,8 @@ class StaffApp {
 
         const startIndex = (this.currentPage - 1) * this.itemsPerPage;
         const endIndex = startIndex + this.itemsPerPage;
-        const pageCustomers = this.customers.slice(startIndex, endIndex);
+        const pageCustomers = this.filteredCustomers.slice(startIndex, endIndex);
+        const totalPages = Math.ceil(this.filteredCustomers.length / this.itemsPerPage);
 
         let html = `
             <div class="table-responsive">
@@ -302,6 +434,20 @@ class StaffApp {
                 </table>
             </div>
         `;
+        
+        if (totalPages > 0) {
+            html += `
+                <div class="pagination-controls">
+                    <button class="btn btn-sm btn-secondary" ${this.currentPage === 1 ? 'disabled' : ''} onclick="app.changePage(-1)">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </button>
+                    <span class="page-info">Page ${this.currentPage} of ${totalPages}</span>
+                    <button class="btn btn-sm btn-secondary" ${this.currentPage >= totalPages ? 'disabled' : ''} onclick="app.changePage(1)">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        }
 
         container.innerHTML = html;
     }
@@ -310,7 +456,7 @@ class StaffApp {
         const container = document.getElementById('deliveriesListContainer');
         if (!container) return;
 
-        if (this.deliveries.length === 0) {
+        if (this.filteredDeliveries.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-truck-loading"></i>
@@ -320,6 +466,11 @@ class StaffApp {
             `;
             return;
         }
+        
+        const startIndex = (this.deliveryPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const pageDeliveries = this.filteredDeliveries.slice(startIndex, endIndex);
+        const totalPages = Math.ceil(this.filteredDeliveries.length / this.itemsPerPage);
 
         let html = `
             <div class="table-responsive">
@@ -334,7 +485,7 @@ class StaffApp {
                     <tbody>
         `;
 
-        html += this.deliveries.map(delivery => {
+        html += pageDeliveries.map(delivery => {
             const customer = this.customers.find(c => c.id === delivery.customerId);
             const customerName = customer ? customer.name : 'Unknown';
             const date = delivery.timestamp && delivery.timestamp.seconds 
@@ -355,12 +506,71 @@ class StaffApp {
                 </table>
             </div>
         `;
+        
+        if (totalPages > 0) {
+            html += `
+                <div class="pagination-controls">
+                    <button class="btn btn-sm btn-secondary" ${this.deliveryPage === 1 ? 'disabled' : ''} onclick="app.changeDeliveryPage(-1)">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </button>
+                    <span class="page-info">Page ${this.deliveryPage} of ${totalPages}</span>
+                    <button class="btn btn-sm btn-secondary" ${this.deliveryPage >= totalPages ? 'disabled' : ''} onclick="app.changeDeliveryPage(1)">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        }
 
         container.innerHTML = html;
     }
+    
+    changeDeliveryPage(delta) {
+        const totalPages = Math.ceil(this.filteredDeliveries.length / this.itemsPerPage);
+        const newPage = this.deliveryPage + delta;
+        
+        if (newPage >= 1 && newPage <= totalPages) {
+            this.deliveryPage = newPage;
+            this.displayDeliveries();
+            document.getElementById('deliveriesView').scrollTop = 0;
+        }
+    }
 
     filterCustomers(searchTerm) {
-        // Similar to main app but simplified
+        if (!searchTerm) {
+            this.filteredCustomers = [...this.customers];
+        } else {
+            const lower = searchTerm.toLowerCase();
+            this.filteredCustomers = this.customers.filter(customer =>
+                customer.name.toLowerCase().includes(lower) ||
+                customer.phone.includes(searchTerm) ||
+                customer.address.toLowerCase().includes(lower)
+            );
+        }
+        this.currentPage = 1;
+        this.displayCustomers();
+    }
+    
+    changePage(delta) {
+        const totalPages = Math.ceil(this.filteredCustomers.length / this.itemsPerPage);
+        const newPage = this.currentPage + delta;
+        
+        if (newPage >= 1 && newPage <= totalPages) {
+            this.currentPage = newPage;
+            this.displayCustomers();
+            const view = document.getElementById('customersView');
+            if(view) view.scrollTop = 0;
+        }
+    }
+
+    getCustomerTypeIcon(type) {
+        const icons = {
+            'home': '🏠 Home',
+            'shop': '🏪 Shop', 
+            'office': '🏢 Office',
+            'hotel': '🏨 Hotel',
+            'restaurant': '🍴 Restaurant'
+        };
+        return icons[type] || '👤 General';
     }
 
     // Scanner functions (same as main app)
@@ -496,6 +706,229 @@ class StaffApp {
             showError('Failed to update password.');
         }
     }
+    
+    async generateAndStoreQRCode(customerId, customerData) {
+        // Staff can't generate QR codes in the current logic, but keeping implementation safe
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const qrData = `AQUAFLOW:${customerId}:${this.userId}`;
+            
+            const canvas = document.createElement('canvas');
+            if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
+                console.warn('QRCode library not loaded.');
+                return;
+            }
+            
+            await QRCode.toCanvas(canvas, qrData, {
+                width: 400, 
+                margin: 2,
+                color: { dark: '#000000', light: '#FFFFFF' }
+            });
+
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            const apiKey = await getImgBBApiKey();
+            
+            const formData = new FormData();
+            formData.append('image', blob);
+            formData.append('key', apiKey);
+
+            const response = await fetch('https://api.imgbb.com/1/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update({
+                    qrCodeUrl: result.data.url,
+                    qrCodeData: qrData
+                });
+                return result.data.url;
+            } else {
+                throw new Error(result.error.message || 'Failed to upload QR code');
+            }
+            
+        } catch (error) {
+            console.error('Error generating QR code:', error);
+            throw error;
+        }
+    }
+    
+    // Scanner logic
+    loadQRScript() {
+        return new Promise((resolve, reject) => {
+            if (typeof Html5Qrcode !== 'undefined') {
+                resolve();
+                return;
+            }
+            console.log('Loading QR script dynamically...');
+            const script = document.createElement('script');
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
+            script.onload = () => {
+                console.log('QR script loaded successfully');
+                resolve();
+            };
+            script.onerror = () => reject(new Error('Failed to load QR script'));
+            document.head.appendChild(script);
+        });
+    }
+
+    async initializeScanner() {
+        try {
+            await this.loadQRScript();
+
+            if (typeof Html5Qrcode === 'undefined') {
+                throw new Error('QR Scanner library not loaded');
+            }
+
+            const placeholder = document.getElementById('scannerPlaceholder');
+            const qrReader = document.getElementById('qrReader');
+            
+            if (placeholder) placeholder.classList.add('hidden');
+            if (qrReader) qrReader.classList.remove('hidden');
+            
+            this.html5QrCode = new Html5Qrcode("qrReader");
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+
+            await this.html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText) => { this.onScanSuccess(decodedText); },
+                (errorMessage) => { console.log('Scan failed:', errorMessage); }
+            );
+            
+        } catch (error) {
+            console.error('Scanner initialization error:', error);
+            this.handleScannerError(error);
+        }
+    }
+
+    onScanSuccess(decodedText) {
+        this.handleScannedQR(decodedText);
+        this.stopScanner();
+        const qrReader = document.getElementById('qrReader');
+        if (qrReader) qrReader.classList.add('hidden');
+    }
+
+    handleScannerError(error) {
+        let errorMessage = 'Failed to start camera. ';
+        showError(errorMessage);
+        this.showManualEntryOption();
+    }
+
+    stopScanner() {
+        if (this.html5QrCode && this.html5QrCode.isScanning) {
+            this.html5QrCode.stop().then(() => { this.html5QrCode.clear(); }).catch(err => {});
+        }
+    }
+
+    showManualEntryOption() {
+        const scannerPlaceholder = document.getElementById('scannerPlaceholder');
+        if (!scannerPlaceholder) return;
+        scannerPlaceholder.classList.remove('hidden');
+        const qrReader = document.getElementById('qrReader');
+        if (qrReader) qrReader.classList.add('hidden');
+    }
+
+    async handleScannedQR(qrData) {
+        if (!qrData.startsWith('AQUAFLOW:')) {
+            showError('Invalid QR code.');
+            this.resetScanner();
+            return;
+        }
+
+        const [, customerId, businessId] = qrData.split(':');
+        
+        // Verify if the QR belongs to the current business context (this.userId is the Owner ID)
+        if (businessId !== this.userId) {
+            showError('This QR code belongs to another business.');
+            this.resetScanner();
+            return;
+        }
+
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).get();
+            
+            if (!customerDoc.exists) {
+                showError('Customer not found.');
+                this.resetScanner();
+                return;
+            }
+
+            const customer = customerDoc.data();
+            this.showDeliveryForm(customerId, customer);
+            
+        } catch (error) {
+            console.error('Error finding customer:', error);
+            this.resetScanner();
+        }
+    }
+
+    showDeliveryForm(customerId, customer) {
+        this.currentCustomerId = customerId;
+        
+        const customerName = document.getElementById('scannedCustomerName');
+        const customerPhone = document.getElementById('scannedCustomerPhone');
+        const customerAddress = document.getElementById('scannedCustomerAddress');
+
+        if (customerName) customerName.textContent = customer.name || 'N/A';
+        if (customerPhone) customerPhone.textContent = customer.phone || 'N/A';
+        if (customerAddress) customerAddress.textContent = customer.address || 'N/A';
+        
+        const qrReader = document.getElementById('qrReader');
+        const deliveryForm = document.getElementById('deliveryForm');
+        
+        if (qrReader) qrReader.classList.add('hidden');
+        if (deliveryForm) deliveryForm.classList.remove('hidden');
+    }
+
+    resetScanner() {
+        this.stopScanner();
+        const deliveryForm = document.getElementById('deliveryForm');
+        const scannerPlaceholder = document.getElementById('scannerPlaceholder');
+        const qrReader = document.getElementById('qrReader');
+        
+        if (deliveryForm) deliveryForm.classList.add('hidden');
+        if (scannerPlaceholder) scannerPlaceholder.classList.remove('hidden');
+        if (qrReader) qrReader.classList.add('hidden');
+        
+        this.currentCustomerId = null;
+        const quantityInput = document.getElementById('deliveryQuantity');
+        if (quantityInput) quantityInput.value = '1';
+    }
+    
+    // Additional helpers
+    async viewCustomerDetails(customerId) {
+        const customer = this.customers.find(c => c.id === customerId);
+        if (!customer) {
+            showError('Customer not found');
+            return;
+        }
+
+        const customerDeliveries = this.deliveries.filter(d => d.customerId === customerId);
+        const totalCans = customer.totalCans || customerDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
+        const totalDeliveries = customer.totalDeliveries || customerDeliveries.length;
+        
+        const currentMonth = getCurrentMonth();
+        const monthlyDeliveries = customerDeliveries.filter(d => d.month === currentMonth);
+        const monthlyCans = monthlyDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
+
+        document.getElementById('detailCustomerName').textContent = customer.name;
+        document.getElementById('detailCustomerPhone').textContent = customer.phone;
+        document.getElementById('detailCustomerAddress').textContent = customer.address;
+        document.getElementById('detailCustomerType').textContent = this.getCustomerTypeIcon(customer.type);
+        document.getElementById('detailCustomerPrice').textContent = `₹${customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20)}`;
+        document.getElementById('detailTotalDeliveries').textContent = totalDeliveries;
+        document.getElementById('detailTotalCans').textContent = totalCans;
+        document.getElementById('detailThisMonth').textContent = `${monthlyCans} cans`;
+
+        document.getElementById('currentCustomerId').value = customerId;
+
+        this.showModal('customerDetailsModal');
+    }
 }
 
 let staffApp;
@@ -533,10 +966,79 @@ function changePassword() {
     if (staffApp) staffApp.changePassword();
 }
 
+function initializeScanner() {
+    if (staffApp) staffApp.initializeScanner();
+}
+
+function resetScanner() {
+    if (staffApp) staffApp.resetScanner();
+}
+
+// Missing global functions that were causing the ReferenceErrors
+function showNotifications() {
+    if (staffApp) {
+        staffApp.showView('notifications'); 
+        staffApp.loadNotifications();
+    }
+}
+
+function clearAllNotifications() {
+    if (staffApp) staffApp.clearAllNotifications();
+}
+
+async function markNotificationAsRead(notificationId) {
+    try {
+        if (!staffApp || !staffApp.userId) return;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        await db.collection('artifacts').doc(appId).collection('users').doc(staffApp.userId).collection('notifications').doc(notificationId).update({
+            read: true
+        });
+        await staffApp.loadNotifications();
+    } catch (error) { console.error(error); }
+}
+
+async function deleteNotification(notificationId) {
+    try {
+        if (!staffApp || !staffApp.userId) return;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        await db.collection('artifacts').doc(appId).collection('users').doc(staffApp.userId).collection('notifications').doc(notificationId).delete();
+        await staffApp.loadNotifications();
+    } catch (error) { console.error(error); }
+}
+
 function viewCustomerDetails(customerId) {
-    // Implementation similar to main app
+    if (staffApp) staffApp.viewCustomerDetails(customerId);
+}
+
+function editCustomerFromDetails() {
+    // Staff cannot edit, but button might exist in reused modal
+    showError("Staff cannot edit customer details.");
+}
+
+function deleteCustomerFromDetails() {
+    // Staff cannot delete
+    showError("Staff cannot delete customers.");
 }
 
 function quickDelivery(customerId) {
-    // Implementation similar to main app
+    const quantity = parseInt(prompt('Enter number of cans:', '1')) || 1;
+    if (quantity > 0 && staffApp) {
+        const customer = staffApp.customers.find(c => c.id === customerId);
+        if (customer) {
+            staffApp.showDeliveryForm(customerId, customer);
+            const quantityInput = document.getElementById('deliveryQuantity');
+            if (quantityInput) quantityInput.value = quantity;
+            staffApp.showModal('scannerModal');
+        }
+    }
+}
+
+function generateCustomerQR(customerId) {
+    // Staff usually just views it, but we can allow view if generated
+    // Logic handled inside generateCustomerQR if we wanted to add it to staffApp
+    showError("Only owners can manage QR codes.");
+}
+
+function logout() {
+    authManager.logout();
 }
