@@ -22,6 +22,56 @@ try {
 const db = firebase.firestore();
 const auth = firebase.auth();
 
+// Initialize Remote Config
+const remoteConfig = firebase.remoteConfig();
+remoteConfig.settings = {
+    minimumFetchIntervalMillis: 3600000, // 1 hour
+    fetchTimeoutMillis: 60000, // 1 minute
+};
+
+// Set default Remote Config values (empty for security)
+remoteConfig.defaultConfig = {
+    'imgbb_api_key': '' // Empty default - must be set in Firebase Console
+};
+
+// Global variable for ImgBB API Key
+let IMGBB_API_KEY = '';
+
+// Function to fetch Remote Config
+async function fetchRemoteConfig() {
+    try {
+        console.log('Fetching Remote Config...');
+        await remoteConfig.fetchAndActivate();
+        IMGBB_API_KEY = remoteConfig.getString('imgbb_api_key');
+        
+        if (!IMGBB_API_KEY) {
+            console.error('ImgBB API Key not found in Remote Config');
+            showError('QR code generation is temporarily unavailable. Please contact support.');
+        } else {
+            console.log('Remote Config fetched successfully');
+            console.log('ImgBB API Key loaded from Remote Config');
+        }
+    } catch (error) {
+        console.error('Error fetching Remote Config:', error);
+        showError('Failed to load configuration. Please refresh the page.');
+    }
+}
+
+// Initialize Remote Config when the app starts
+document.addEventListener('DOMContentLoaded', function() {
+    fetchRemoteConfig();
+});
+
+// Helper function to get ImgBB API Key with validation
+function getImgBBApiKey() {
+    if (IMGBB_API_KEY && IMGBB_API_KEY.trim() !== '') {
+        return IMGBB_API_KEY;
+    }
+    
+    console.error('ImgBB API Key is not available');
+    return null;
+}
+
 // CRITICAL: Configure auth persistence FIRST
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
   .then(() => {
@@ -36,9 +86,6 @@ db.enablePersistence()
   .catch((err) => {
       console.log('Firebase persistence error:', err);
   });
-
-// ImgBB API Key for QR code storage
-const IMGBB_API_KEY = 'bbfde58b1da5fc9ee9d7d6a591852f71';
 
 // Utility functions
 const getCurrentMonth = () => {
