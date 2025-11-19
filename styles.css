@@ -1002,13 +1002,53 @@ textarea.form-input {
 }
 
 .scanner-placeholder {
-    text-align: center;
-    color: var(--gray-400);
+  text-align: center;
+  color: var(--gray-400);
+  transition: all 0.3s ease;
 }
 
 .scanner-placeholder i {
-    font-size: 4rem;
-    margin-bottom: var(--space-md);
+  font-size: 4rem;
+  margin-bottom: var(--space-md);
+  animation: float 3s ease-in-out infinite;
+}
+
+.scanner-placeholder p {
+  margin-bottom: var(--space-lg);
+  font-size: 1.1rem;
+}
+
+.scanner-placeholder .btn {
+  transition: all 0.3s ease;
+}
+
+.scanner-placeholder .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 102, 255, 0.3);
+}
+
+/* Scanner loading state */
+.scanner-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+}
+
+.scanner-loading .spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--space-md);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .qr-scanner {
