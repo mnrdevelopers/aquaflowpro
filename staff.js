@@ -59,13 +59,28 @@ class StaffApp {
         
         if (!user) {
             console.log('No user found, redirecting to auth.html');
-            window.location.href = 'auth.html';
+            window.location.replace('auth.html');
             return false;
         }
+
+        // CRITICAL FIX: Load user data if missing (prevents redirect loops on mobile)
+        if (!this.userData) {
+            console.log('User data missing in Staff App, attempting to load directly...');
+            await authManager.loadUserData(user);
+            this.userData = authManager.getUserData();
+        }
         
-        if (!this.userData || this.userData.role !== 'staff') {
+        // Double check after load attempt
+        if (!this.userData) {
+             console.error('CRITICAL: User data unavailable in Staff App.');
+             // Don't redirect immediately to loop, show error
+             showError("Failed to load user profile. Please check internet.");
+             return false;
+        }
+        
+        if (this.userData.role !== 'staff') {
             console.log('Not a staff user, redirecting to main app');
-            window.location.href = 'app.html';
+            window.location.replace('app.html');
             return false;
         }
         
