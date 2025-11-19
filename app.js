@@ -28,6 +28,27 @@ class AquaFlowApp {
         this.setupPremiumAnimations();
   }
 
+     setupScrollAnimations() {
+    // Add subtle animations to elements when they come into view
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    });
+
+    // Observe elements that should animate in
+    document.querySelectorAll('.stat-card, .feature, .quick-action-btn').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(20px)';
+      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(el);
+    });
+  }
+}
+
     async init() {
         console.log('App initialization started');
         
@@ -2154,24 +2175,3 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-
-  setupScrollAnimations() {
-    // Add subtle animations to elements when they come into view
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.style.opacity = '1';
-          entry.target.style.transform = 'translateY(0)';
-        }
-      });
-    });
-
-    // Observe elements that should animate in
-    document.querySelectorAll('.stat-card, .feature, .quick-action-btn').forEach(el => {
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(20px)';
-      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-      observer.observe(el);
-    });
-  }
-}
