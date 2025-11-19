@@ -1590,12 +1590,12 @@ class AquaFlowApp {
         // Robust Phone Number Formatting
         let phone = customer.phone.replace(/\D/g, ''); // Remove non-digits
         
-        // Remove leading zero if present (e.g., 09876543210 -> 9876543210)
+        // Remove leading zero if present
         if (phone.startsWith('0')) {
             phone = phone.substring(1);
         }
         
-        // Add country code (India default) if missing (e.g., 9876543210 -> 919876543210)
+        // Add country code (India default) if missing
         if (phone.length === 10) {
             phone = '91' + phone;
         }
@@ -1609,10 +1609,17 @@ class AquaFlowApp {
         const businessName = this.userData.businessName || 'AquaFlow Pro';
         const note = `Water Bill ${month}`;
         
+        // Format parameters for UPI URL
+        // Use + for spaces to ensure the link remains unbroken in WhatsApp but is readable
+        const safeName = encodeURIComponent(businessName).replace(/%20/g, '+');
+        const safeNote = encodeURIComponent(note).replace(/%20/g, '+');
+        const safeAmount = parseFloat(amount).toFixed(2); // Ensure decimal format
+
         // Construct UPI Link
-        const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(businessName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
+        // Note: 'am' must be decimal. 'pn' should not have spaces (handled by safeName).
+        const upiLink = `upi://pay?pa=${upiId}&pn=${safeName}&am=${safeAmount}&cu=INR&tn=${safeNote}`;
         
-        // Create Message
+        // Create Message with clear separation for the link
         const message = `Hello ${customer.name},
 Your water delivery bill for ${month} is *₹${amount}* (${totalCans} cans).
 
@@ -1623,10 +1630,16 @@ Thank you,
 ${businessName}`;
 
         // Use api.whatsapp.com for better cross-platform compatibility
+        // encodeURIComponent on the WHOLE message ensures the upiLink's special chars (like & and ?) are preserved in the whatsapp URL param
         const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
         
-        // Open in new tab
-        window.open(whatsappUrl, '_blank');
+        // Try to open
+        const win = window.open(whatsappUrl, '_blank');
+        
+        // Fallback if popup blocked (though rarer on mobile click events)
+        if (!win) {
+            window.location.href = whatsappUrl;
+        }
     }
 
     async markBillPaid(customerId, month, amount) {
