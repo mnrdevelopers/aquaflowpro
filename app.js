@@ -36,7 +36,7 @@ class AquaFlowApp {
         const authDataReady = await this.checkAuthentication();
         
         if (!authDataReady) {
-            console.log('Authentication check failed, stopping app initialization');
+            console.log('Authentication check failed or redirecting...');
             return;
         }
 
@@ -64,7 +64,7 @@ class AquaFlowApp {
         const user = authManager.getCurrentUser();
         this.userData = authManager.getUserData(); 
         
-        console.log('Auth check - User:', user ? 'present' : 'absent', 'UserData:', this.userData ? 'loaded' : 'missing');
+        console.log('Auth check - User:', user ? 'present' : 'absent');
         
         if (!user) {
             console.log('No user found, redirecting to auth.html');
@@ -74,12 +74,7 @@ class AquaFlowApp {
         
         this.authUserId = user.uid;
 
-        // Check if email is verified
-        if (user && !user.emailVerified) {
-            const banner = document.getElementById('verificationBanner');
-            if (banner) banner.style.display = 'block';
-        }
-        
+        // Load user data if missing
         if (!this.userData) {
             console.log('User data missing, attempting to load directly...');
             await authManager.loadUserData(user);
@@ -87,46 +82,31 @@ class AquaFlowApp {
         }
 
         if (!this.userData) {
-             console.error('CRITICAL: User data unavailable. Using fallback.');
-             this.userData = { role: 'owner', businessName: 'AquaFlow Pro', defaultPrice: 20 };
+             console.error('CRITICAL: User data unavailable.');
+             // Do not default to owner if data is missing for security
+             return false;
         }
         
-        // ROLE MANAGEMENT
+        // ROLE MANAGEMENT & STRICT REDIRECT
         this.userRole = this.userData.role || 'owner';
         
+        // FIX: Strict separation. If Staff is on app.html, redirect to staff.html
         if (this.userRole === 'staff') {
-            // If Staff, we use the Owner's ID for data access
-            this.userId = this.userData.ownerId;
-            if (!this.userId) {
-                showError('Configuration Error: Staff account has no linked Business Owner.');
-                return false;
-            }
-            console.log('Staff Login: Accessing data for Owner ID:', this.userId);
-            
-            // We need to fetch the OWNER'S settings (Business Name, Price) to override Staff's view
-            await this.fetchOwnerSettings();
-        } else {
-            // If Owner, we use their own ID
-            this.userId = user.uid;
+            console.log('Staff user detected in Owner App. Redirecting to Staff Dashboard...');
+            window.location.replace('staff.html');
+            return false;
+        }
+
+        // Owner Logic
+        this.userId = user.uid;
+        
+        // Check if email is verified
+        if (user && !user.emailVerified) {
+            const banner = document.getElementById('verificationBanner');
+            if (banner) banner.style.display = 'block';
         }
         
         return true;
-    }
-
-    async fetchOwnerSettings() {
-        try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const ownerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).get();
-            if (ownerDoc.exists) {
-                const ownerData = ownerDoc.data();
-                // Merge owner settings into local userData for UI consistency
-                this.userData.businessName = ownerData.businessName;
-                this.userData.defaultPrice = ownerData.defaultPrice;
-                this.userData.businessPhone = ownerData.businessPhone;
-            }
-        } catch (error) {
-            console.error('Error fetching owner settings:', error);
-        }
     }
 
     setupEventListeners() {
@@ -163,7 +143,6 @@ class AquaFlowApp {
                 throw new Error('User ID is undefined. Cannot load customers.');
             }
             
-            // Using this.userId (which might be Owner ID)
             const customersCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers');
             
             const snapshot = await customersCollectionRef
@@ -220,7 +199,6 @@ class AquaFlowApp {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             if (!this.userId) return;
 
-            // Staff and Owners share notifications of the business
             const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
             
             const snapshot = await notificationsRef
@@ -242,7 +220,6 @@ class AquaFlowApp {
     }
 
     async loadPayments() {
-        // Only owners strictly need to see payments, but staff might see bills status.
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             if (!this.userId) return;
@@ -569,11 +546,6 @@ class AquaFlowApp {
     }
 
     async confirmDeleteDelivery() {
-        if (this.userRole === 'staff') {
-            showError('Only the business owner can delete deliveries.');
-            return;
-        }
-
         if(!confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
         
         const deliveryId = document.getElementById('editDeliveryId').value;
@@ -683,11 +655,9 @@ class AquaFlowApp {
                             <button class="btn btn-sm btn-outline" onclick="viewCustomerDetails('${customer.id}')" title="Details">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            ${this.userRole === 'owner' ? `
                             <button class="btn btn-sm btn-outline" onclick="editCustomer('${customer.id}')" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            ` : ''}
                         </div>
                     </td>
                 </tr>
@@ -798,7 +768,7 @@ class AquaFlowApp {
                 showError('Customer added but QR code generation failed');
             }
 
-            await this.addNotification('New Customer Added', `Added customer: ${customerData.name} (by ${this.userRole})`, 'success');
+            await this.addNotification('New Customer Added', `Added customer: ${customerData.name}`, 'success');
 
             e.target.reset();
             this.closeModal('addCustomerModal');
@@ -820,11 +790,6 @@ class AquaFlowApp {
     }
 
     editCustomer(customerId) {
-        if (this.userRole === 'staff') {
-            showError('Only the business owner can edit customers.');
-            return;
-        }
-
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) {
             showError('Customer not found');
@@ -884,11 +849,6 @@ class AquaFlowApp {
     }
 
     async deleteCustomer(customerId) {
-        if (this.userRole === 'staff') {
-            showError('Only the business owner can delete customers.');
-            return;
-        }
-
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         try {
@@ -1344,8 +1304,8 @@ class AquaFlowApp {
                 quantity: quantity,
                 timestamp: new Date(),
                 month: getCurrentMonth(),
-                recordedBy: this.authUserId, // Track which staff recorded it
-                recordedByName: this.userRole === 'staff' ? 'Staff' : 'Owner' 
+                recordedBy: this.authUserId, // Track who recorded it
+                recordedByName: 'Owner'
             };
 
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
@@ -1528,7 +1488,7 @@ class AquaFlowApp {
                         <h4>${customer.name}</h4>
                         <p>${delivery.quantity} can(s) • ${deliveryDate.toLocaleDateString()}</p>
                     </div>
-                    ${this.userRole === 'owner' ? `<div class="activity-amount">${formatCurrency(amount)}</div>` : ''}
+                    <div class="activity-amount">${formatCurrency(amount)}</div>
                 </div>
             `;
         }).join('');
@@ -1806,11 +1766,6 @@ ${businessName}`;
     async saveSettings(e) {
         e.preventDefault();
         
-        if (this.userRole === 'staff') {
-            showError('Staff members cannot change business settings.');
-            return;
-        }
-
         const businessName = document.getElementById('settingsBusinessName').value;
         const defaultPrice = parseInt(document.getElementById('settingsDefaultPrice').value);
         const businessPhone = document.getElementById('settingsBusinessPhone').value;
@@ -1999,27 +1954,13 @@ ${businessName}`;
             settingsBusinessId.value = this.userId; // Show User ID for sharing
         }
 
-        // ROLE-BASED UI UPDATES
-        const isStaff = this.userRole === 'staff';
-        
-        // Role Badge
+        // Role Badge - Always Owner in this app.js version
         const roleBadge = document.getElementById('userRoleBadge');
         if (roleBadge) {
-            roleBadge.textContent = isStaff ? 'Staff' : 'Owner';
-            roleBadge.className = isStaff ? 'badge bg-secondary' : 'badge bg-primary';
+            roleBadge.textContent = 'Owner';
+            roleBadge.className = 'badge bg-primary';
             roleBadge.style.display = 'inline-block';
         }
-        
-        // Hide/Show Elements based on data-role="owner"
-        document.querySelectorAll('[data-role="owner"]').forEach(el => {
-            if (isStaff) {
-                el.style.display = 'none';
-                el.classList.add('hidden');
-            } else {
-                el.style.display = '';
-                el.classList.remove('hidden');
-            }
-        });
         
         this.showView(this.currentView);
     }
