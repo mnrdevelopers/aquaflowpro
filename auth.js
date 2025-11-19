@@ -12,34 +12,45 @@ class AuthManager {
         this.setupFormHandlers();
     }
 
-   setupAuthStateListener() {
-    auth.onAuthStateChanged(async (user) => {
-        console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
-        this.currentUser = user;
-        this.authStateReady = true;
-        
-        if (user) {
-            const userDataLoaded = await this.loadUserData(user);
+    setupAuthStateListener() {
+        auth.onAuthStateChanged(async (user) => {
+            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+            this.currentUser = user;
+            this.authStateReady = true;
             
-            if (window.location.pathname.includes('auth.html') && userDataLoaded) {
-                // Redirect based on role
-                if (this.userData.role === 'staff') {
-                    window.location.href = 'staff.html';
-                } else {
-                    window.location.href = 'app.html';
+            if (user) {
+                // Only load data if we don't have it (or if it's a page reload)
+                if (!this.userData) {
+                    await this.loadUserData(user);
+                }
+                
+                // Auto-redirect if user is already logged in and lands on auth page
+                if (window.location.pathname.includes('auth.html') && this.userData) {
+                    this.redirectBasedOnRole();
+                }
+            } else {
+                this.userData = null;
+                localStorage.removeItem('userData');
+                
+                // Redirect to auth if on protected pages
+                if (window.location.pathname.includes('app.html') || 
+                    window.location.pathname.includes('staff.html')) {
+                    window.location.href = 'auth.html';
                 }
             }
+        });
+    }
+
+    redirectBasedOnRole() {
+        if (!this.userData) return;
+        
+        // Use replace() to prevent user from going back to login page
+        if (this.userData.role === 'staff') {
+            window.location.replace('staff.html');
         } else {
-            this.userData = null;
-            localStorage.removeItem('userData');
-            
-            if (window.location.pathname.includes('app.html') || 
-                window.location.pathname.includes('staff.html')) {
-                window.location.href = 'auth.html';
-            }
+            window.location.replace('app.html');
         }
-    });
-}
+    }
 
    setupFormHandlers() {
     // Login form
@@ -149,8 +160,21 @@ clearInputError(input) {
     
     try {
         this.setFormLoading('loginForm', true);
-        await auth.signInWithEmailAndPassword(email, password);
+        
+        // 1. Perform Login
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
         showSuccess('Welcome back!');
+
+        // 2. Explicitly Load Data (Don't wait for the listener)
+        const success = await this.loadUserData(userCredential.user);
+        
+        // 3. Explicitly Redirect
+        if (success) {
+            this.redirectBasedOnRole();
+        } else {
+            showError('Login successful, but failed to load user profile.');
+        }
+
     } catch (error) {
         console.error('Login error:', error);
         this.handleAuthError(error);
@@ -218,7 +242,6 @@ clearInputError(input) {
             }
             userData.role = 'staff';
             userData.ownerId = businessOwnerId;
-            // Note: Staff inherits business details from the ownerId when loaded in app.js
         } else {
             // Business Owner Validation
             const businessName = document.getElementById('businessName').value;
@@ -237,9 +260,6 @@ clearInputError(input) {
         try {
             this.setFormLoading('signupForm', true);
             
-            // Removed the pre-signup DB check for ownerId here because 
-            // unauthenticated users don't have permission to read other users' data.
-
             // Create user account
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
@@ -253,8 +273,13 @@ clearInputError(input) {
 
             // Save User Data
             try {
-                // Write own user document (allowed because auth.uid matches doc path)
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
+                
+                // Update local state immediately
+                this.userData = userData;
+                this.userData.uid = user.uid;
+                localStorage.setItem('userData', JSON.stringify(this.userData));
+
             } catch (firestoreError) {
                 console.error('Firestore write error:', firestoreError);
                 await user.delete(); // Rollback
@@ -263,9 +288,10 @@ clearInputError(input) {
 
             showSuccess(isStaff ? 'Staff account created!' : 'Business account created!');
             
+            // Explicit Redirect
             setTimeout(() => {
-                window.location.href = 'app.html';
-            }, 2000);
+                this.redirectBasedOnRole();
+            }, 1500);
             
         } catch (error) {
             console.error('Signup error:', error);
@@ -354,7 +380,7 @@ clearInputError(input) {
         try {
             await auth.signOut();
             localStorage.removeItem('userData');
-            showSuccess('Signed out successfully');
+            window.location.href = 'auth.html';
         } catch (error) {
             console.error('Logout error:', error);
             showError('Error signing out');
