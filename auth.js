@@ -236,18 +236,8 @@ clearInputError(input) {
         try {
             this.setFormLoading('signupForm', true);
             
-            // Optional: Verify Owner ID exists before creating user (Simple check)
-            if (isStaff) {
-                const ownerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(userData.ownerId).get();
-                // Note: This might fail if security rules are strict, but assuming open rules for this generated app context.
-                // If it fails due to permission, we proceed assuming ID is correct, app.js will handle access errors.
-                if (ownerDoc.exists) {
-                    console.log('Linking to business:', ownerDoc.data().businessName);
-                } else {
-                    // We can't always verify due to permissions, but if we can read it and it's missing:
-                   // console.warn('Owner ID might be invalid or not public.');
-                }
-            }
+            // Removed the pre-signup DB check for ownerId here because 
+            // unauthenticated users don't have permission to read other users' data.
 
             // Create user account
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
@@ -262,6 +252,7 @@ clearInputError(input) {
 
             // Save User Data
             try {
+                // Write own user document (allowed because auth.uid matches doc path)
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
             } catch (firestoreError) {
                 console.error('Firestore write error:', firestoreError);
