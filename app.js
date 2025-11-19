@@ -10,8 +10,13 @@ class AquaFlowApp {
         this.currentView = 'dashboard';
         this.scannerActive = false;
         this.currentCustomerId = null;
-        this.userId = null;
+        
+        // User Identity and Role Management
+        this.userId = null; // This will store the DATA OWNER ID (Business Owner ID)
+        this.authUserId = null; // This stores the actual logged-in user ID
         this.userData = null;
+        this.userRole = 'owner'; // Default role
+        
         this.html5QrCode = null;
         
         // Pagination State
@@ -66,7 +71,7 @@ class AquaFlowApp {
             return false;
         }
         
-        this.userId = user.uid;
+        this.authUserId = user.uid;
 
         // Check if email is verified
         if (user && !user.emailVerified) {
@@ -78,18 +83,49 @@ class AquaFlowApp {
             console.log('User data missing, attempting to load directly...');
             await authManager.loadUserData(user);
             this.userData = authManager.getUserData();
-            
-            if (!this.userData) {
-                console.error('CRITICAL: User is signed in, but user data is unavailable even after reload. User ID:', this.userId);
-                this.userData = {
-                    businessName: 'AquaFlow Pro',
-                    defaultPrice: 20
-                };
-                showError('User data loading issue. Using default settings.');
+        }
+
+        if (!this.userData) {
+             console.error('CRITICAL: User data unavailable. Using fallback.');
+             this.userData = { role: 'owner', businessName: 'AquaFlow Pro', defaultPrice: 20 };
+        }
+        
+        // ROLE MANAGEMENT
+        this.userRole = this.userData.role || 'owner';
+        
+        if (this.userRole === 'staff') {
+            // If Staff, we use the Owner's ID for data access
+            this.userId = this.userData.ownerId;
+            if (!this.userId) {
+                showError('Configuration Error: Staff account has no linked Business Owner.');
+                return false;
             }
+            console.log('Staff Login: Accessing data for Owner ID:', this.userId);
+            
+            // We need to fetch the OWNER'S settings (Business Name, Price) to override Staff's view
+            await this.fetchOwnerSettings();
+        } else {
+            // If Owner, we use their own ID
+            this.userId = user.uid;
         }
         
         return true;
+    }
+
+    async fetchOwnerSettings() {
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const ownerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).get();
+            if (ownerDoc.exists) {
+                const ownerData = ownerDoc.data();
+                // Merge owner settings into local userData for UI consistency
+                this.userData.businessName = ownerData.businessName;
+                this.userData.defaultPrice = ownerData.defaultPrice;
+                this.userData.businessPhone = ownerData.businessPhone;
+            }
+        } catch (error) {
+            console.error('Error fetching owner settings:', error);
+        }
     }
 
     setupEventListeners() {
@@ -126,6 +162,7 @@ class AquaFlowApp {
                 throw new Error('User ID is undefined. Cannot load customers.');
             }
             
+            // Using this.userId (which might be Owner ID)
             const customersCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers');
             
             const snapshot = await customersCollectionRef
@@ -158,10 +195,7 @@ class AquaFlowApp {
             
             const deliveriesCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries');
             
-            const currentMonth = getCurrentMonth();
-            
             const snapshot = await deliveriesCollectionRef
-                // .where('month', '==', currentMonth) 
                 .orderBy('timestamp', 'desc')
                 .limit(500) 
                 .get();
@@ -185,6 +219,7 @@ class AquaFlowApp {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             if (!this.userId) return;
 
+            // Staff and Owners share notifications of the business
             const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
             
             const snapshot = await notificationsRef
@@ -206,6 +241,7 @@ class AquaFlowApp {
     }
 
     async loadPayments() {
+        // Only owners strictly need to see payments, but staff might see bills status.
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             if (!this.userId) return;
@@ -236,7 +272,8 @@ class AquaFlowApp {
                 message: message,
                 type: type,
                 read: false,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: this.authUserId // Track who created it
             };
 
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications').add(notificationData);
@@ -247,7 +284,6 @@ class AquaFlowApp {
         }
     }
 
-    // NEW: Added missing clearAllNotifications method
     async clearAllNotifications() {
         if (!confirm('Are you sure you want to clear all notifications?')) return;
 
@@ -258,7 +294,6 @@ class AquaFlowApp {
             const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
             const snapshot = await notificationsRef.get();
 
-            // Firestore batch delete (max 500 operations)
             const batch = db.batch();
             snapshot.docs.forEach(doc => {
                 batch.delete(doc.ref);
@@ -533,6 +568,11 @@ class AquaFlowApp {
     }
 
     async confirmDeleteDelivery() {
+        if (this.userRole === 'staff') {
+            showError('Only the business owner can delete deliveries.');
+            return;
+        }
+
         if(!confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
         
         const deliveryId = document.getElementById('editDeliveryId').value;
@@ -642,9 +682,11 @@ class AquaFlowApp {
                             <button class="btn btn-sm btn-outline" onclick="viewCustomerDetails('${customer.id}')" title="Details">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            ${this.userRole === 'owner' ? `
                             <button class="btn btn-sm btn-outline" onclick="editCustomer('${customer.id}')" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
+                            ` : ''}
                         </div>
                     </td>
                 </tr>
@@ -723,7 +765,7 @@ class AquaFlowApp {
             address: document.getElementById('customerAddress').value,
             type: document.getElementById('customerType').value,
             pricePerCan: parseInt(document.getElementById('customerPrice').value) || (this.userData ? this.userData.defaultPrice : 20),
-            userId: this.userId,
+            createdBy: this.authUserId,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             totalCans: 0, 
             totalDeliveries: 0
@@ -755,7 +797,7 @@ class AquaFlowApp {
                 showError('Customer added but QR code generation failed');
             }
 
-            await this.addNotification('New Customer Added', `Added customer: ${customerData.name}`, 'success');
+            await this.addNotification('New Customer Added', `Added customer: ${customerData.name} (by ${this.userRole})`, 'success');
 
             e.target.reset();
             this.closeModal('addCustomerModal');
@@ -777,6 +819,11 @@ class AquaFlowApp {
     }
 
     editCustomer(customerId) {
+        if (this.userRole === 'staff') {
+            showError('Only the business owner can edit customers.');
+            return;
+        }
+
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) {
             showError('Customer not found');
@@ -836,6 +883,11 @@ class AquaFlowApp {
     }
 
     async deleteCustomer(customerId) {
+        if (this.userRole === 'staff') {
+            showError('Only the business owner can delete customers.');
+            return;
+        }
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         try {
@@ -906,6 +958,7 @@ class AquaFlowApp {
     async generateAndStoreQRCode(customerId, customerData) {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // QR Data uses the OWNER'S ID so any staff can scan it
             const qrData = `AQUAFLOW:${customerId}:${this.userId}`;
             
             const canvas = document.createElement('canvas');
@@ -1222,9 +1275,10 @@ class AquaFlowApp {
             return;
         }
 
-        const [, customerId, userId] = qrData.split(':');
+        const [, customerId, businessId] = qrData.split(':');
         
-        if (userId !== this.userId) {
+        // Verify if the QR belongs to the current business context (this.userId is the Owner ID)
+        if (businessId !== this.userId) {
             showError('This QR code belongs to another business.');
             this.resetScanner();
             return;
@@ -1289,7 +1343,8 @@ class AquaFlowApp {
                 quantity: quantity,
                 timestamp: new Date(),
                 month: getCurrentMonth(),
-                userId: this.userId
+                recordedBy: this.authUserId, // Track which staff recorded it
+                recordedByName: this.userRole === 'staff' ? 'Staff' : 'Owner' 
             };
 
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
@@ -1472,7 +1527,7 @@ class AquaFlowApp {
                         <h4>${customer.name}</h4>
                         <p>${delivery.quantity} can(s) • ${deliveryDate.toLocaleDateString()}</p>
                     </div>
-                    <div class="activity-amount">${formatCurrency(amount)}</div>
+                    ${this.userRole === 'owner' ? `<div class="activity-amount">${formatCurrency(amount)}</div>` : ''}
                 </div>
             `;
         }).join('');
@@ -1665,7 +1720,7 @@ ${businessName}`;
                 month,
                 amount,
                 paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-                userId: this.userId
+                recordedBy: this.authUserId
             };
 
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('payments').add(paymentData);
@@ -1749,6 +1804,12 @@ ${businessName}`;
 
     async saveSettings(e) {
         e.preventDefault();
+        
+        if (this.userRole === 'staff') {
+            showError('Staff members cannot change business settings.');
+            return;
+        }
+
         const businessName = document.getElementById('settingsBusinessName').value;
         const defaultPrice = parseInt(document.getElementById('settingsDefaultPrice').value);
         const businessPhone = document.getElementById('settingsBusinessPhone').value;
@@ -1843,9 +1904,11 @@ ${businessName}`;
             businessNameElement.textContent = this.userData.businessName;
         }
         
+        // Settings Inputs
         const settingsBusinessName = document.getElementById('settingsBusinessName');
         const settingsDefaultPrice = document.getElementById('settingsDefaultPrice');
         const settingsBusinessPhone = document.getElementById('settingsBusinessPhone');
+        const settingsBusinessId = document.getElementById('settingsBusinessId');
 
         if (settingsBusinessName && this.userData) {
             settingsBusinessName.value = this.userData.businessName || '';
@@ -1856,6 +1919,31 @@ ${businessName}`;
         if (settingsBusinessPhone && this.userData) {
             settingsBusinessPhone.value = this.userData.businessPhone || '';
         }
+        if (settingsBusinessId && this.userId) {
+            settingsBusinessId.value = this.userId; // Show User ID for sharing
+        }
+
+        // ROLE-BASED UI UPDATES
+        const isStaff = this.userRole === 'staff';
+        
+        // Role Badge
+        const roleBadge = document.getElementById('userRoleBadge');
+        if (roleBadge) {
+            roleBadge.textContent = isStaff ? 'Staff' : 'Owner';
+            roleBadge.className = isStaff ? 'badge bg-secondary' : 'badge bg-primary';
+            roleBadge.style.display = 'inline-block';
+        }
+        
+        // Hide/Show Elements based on data-role="owner"
+        document.querySelectorAll('[data-role="owner"]').forEach(el => {
+            if (isStaff) {
+                el.style.display = 'none';
+                el.classList.add('hidden');
+            } else {
+                el.style.display = '';
+                el.classList.remove('hidden');
+            }
+        });
         
         this.showView(this.currentView);
     }
@@ -2075,4 +2163,11 @@ function logout() {
 
 function addCustomer(e) {
     if (app) app.addCustomer(e);
+}
+
+function copyBusinessId() {
+    const input = document.getElementById('settingsBusinessId');
+    input.select();
+    document.execCommand('copy');
+    showSuccess('Business ID copied to clipboard!');
 }
