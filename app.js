@@ -254,17 +254,22 @@ class AquaFlowApp {
         }
 
         container.innerHTML = this.notifications.map(notification => {
+            // FIX: Ensure timestamp handling is robust against nulls
             const timestamp = notification.timestamp?.toDate ? notification.timestamp.toDate() : new Date();
             const timeAgo = this.getTimeAgo(timestamp);
             
+            // FIX: Fallbacks for title and message to prevent "undefined" text
+            const title = notification.title || 'Notification';
+            const message = notification.message || '';
+
             return `
                 <div class="notification-item ${notification.read ? '' : 'unread'}" data-id="${notification.id}">
                     <div class="notification-icon ${notification.type}">
                         <i class="fas fa-${this.getNotificationIcon(notification.type)}"></i>
                     </div>
                     <div class="notification-content">
-                        <h4>${notification.title}</h4>
-                        <p>${notification.message}</p>
+                        <h4>${title}</h4>
+                        <p>${message}</p>
                         <span class="notification-time">${timeAgo}</span>
                     </div>
                     <div class="notification-actions">
@@ -295,6 +300,7 @@ class AquaFlowApp {
     }
 
     getTimeAgo(date) {
+        if (!date) return '';
         const now = new Date();
         const diffInSeconds = Math.floor((now - date) / 1000);
         
@@ -1458,6 +1464,12 @@ function showNotifications() {
 
 async function markNotificationAsRead(notificationId) {
     try {
+        // FIX: Add safety check for app and userId
+        if (!app || !app.userId) {
+            console.error('App not initialized or user not logged in');
+            return;
+        }
+        
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).update({
@@ -1475,6 +1487,12 @@ async function markNotificationAsRead(notificationId) {
 
 async function deleteNotification(notificationId) {
     try {
+        // FIX: Add safety check for app and userId
+        if (!app || !app.userId) {
+            console.error('App not initialized or user not logged in');
+            return;
+        }
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).delete();
@@ -1493,13 +1511,25 @@ async function clearAllNotifications() {
         return;
     }
 
+    // FIX: Add safety check for app and userId
+    if (!app || !app.userId) {
+        console.error('App not initialized or user not logged in');
+        return;
+    }
+
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications');
         
         const snapshot = await notificationsRef.get();
-        const deletePromises = snapshot.docs.map(doc => doc.ref.delete());
-        await Promise.all(deletePromises);
+        
+        // FIX: Use batch delete for efficiency and reliability
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        
+        await batch.commit();
 
         // Reload notifications
         await app.loadNotifications();
