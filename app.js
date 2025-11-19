@@ -28,6 +28,73 @@ class AquaFlowApp {
         this.setupPremiumAnimations();
   }
 
+    // Add ripple effect to scanner button
+function addRippleEffect(event) {
+  const btn = event.currentTarget;
+  const circle = document.createElement("span");
+  const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+  const radius = diameter / 2;
+
+  circle.style.width = circle.style.height = `${diameter}px`;
+  circle.style.left = `${event.clientX - btn.offsetLeft - radius}px`;
+  circle.style.top = `${event.clientY - btn.offsetTop - radius}px`;
+  circle.classList.add("ripple");
+
+  const ripple = btn.getElementsByClassName("ripple")[0];
+  if (ripple) {
+    ripple.remove();
+  }
+
+  btn.appendChild(circle);
+}
+
+// Initialize enhanced interactions
+function initializePremiumInteractions() {
+  // Add ripple to scanner button
+  const scannerBtn = document.querySelector('.scanner-btn');
+  if (scannerBtn) {
+    scannerBtn.addEventListener('click', addRippleEffect);
+  }
+
+  // Add hover sounds (optional)
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('mouseenter', () => {
+      // Optional: Add subtle sound effect here
+      item.style.transform = 'translateY(-4px)';
+    });
+    
+    item.addEventListener('mouseleave', () => {
+      if (!item.classList.contains('active')) {
+        item.style.transform = 'translateY(0)';
+      }
+    });
+  });
+}
+
+// Update the DOMContentLoaded event in app.js
+document.addEventListener('DOMContentLoaded', function() {
+  app = new AquaFlowApp();
+  initializePremiumInteractions(); // Add this line
+});
+
+
+ setupPremiumAnimations() {
+    // Add intersection observer for scroll animations
+    this.setupScrollAnimations();
+    
+    // Initialize ripple effects
+    this.setupRippleEffects();
+  }
+
+  setupRippleEffects() {
+    document.addEventListener('click', function(e) {
+      if (e.target.closest('.scanner-btn')) {
+        addRippleEffect(e);
+      }
+    });
+  }
+
      setupScrollAnimations() {
     // Add subtle animations to elements when they come into view
     const observer = new IntersectionObserver((entries) => {
@@ -2108,70 +2175,3 @@ function copyBusinessId() {
     document.execCommand('copy');
     showSuccess('Business ID copied to clipboard!');
 }
-
-// Add ripple effect to scanner button
-function addRippleEffect(event) {
-  const btn = event.currentTarget;
-  const circle = document.createElement("span");
-  const diameter = Math.max(btn.clientWidth, btn.clientHeight);
-  const radius = diameter / 2;
-
-  circle.style.width = circle.style.height = `${diameter}px`;
-  circle.style.left = `${event.clientX - btn.offsetLeft - radius}px`;
-  circle.style.top = `${event.clientY - btn.offsetTop - radius}px`;
-  circle.classList.add("ripple");
-
-  const ripple = btn.getElementsByClassName("ripple")[0];
-  if (ripple) {
-    ripple.remove();
-  }
-
-  btn.appendChild(circle);
-}
-
-// Initialize enhanced interactions
-function initializePremiumInteractions() {
-  // Add ripple to scanner button
-  const scannerBtn = document.querySelector('.scanner-btn');
-  if (scannerBtn) {
-    scannerBtn.addEventListener('click', addRippleEffect);
-  }
-
-  // Add hover sounds (optional)
-  const navItems = document.querySelectorAll('.nav-item');
-  navItems.forEach(item => {
-    item.addEventListener('mouseenter', () => {
-      // Optional: Add subtle sound effect here
-      item.style.transform = 'translateY(-4px)';
-    });
-    
-    item.addEventListener('mouseleave', () => {
-      if (!item.classList.contains('active')) {
-        item.style.transform = 'translateY(0)';
-      }
-    });
-  });
-}
-
-// Update the DOMContentLoaded event in app.js
-document.addEventListener('DOMContentLoaded', function() {
-  app = new AquaFlowApp();
-  initializePremiumInteractions(); // Add this line
-});
-
-
- setupPremiumAnimations() {
-    // Add intersection observer for scroll animations
-    this.setupScrollAnimations();
-    
-    // Initialize ripple effects
-    this.setupRippleEffects();
-  }
-
-  setupRippleEffects() {
-    document.addEventListener('click', function(e) {
-      if (e.target.closest('.scanner-btn')) {
-        addRippleEffect(e);
-      }
-    });
-  }
