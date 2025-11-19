@@ -413,13 +413,27 @@ class AquaFlowApp {
             return;
         }
 
+        // Prevent double submission
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
         try {
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').add(customerData);
             customerData.id = docRef.id;
+            
+            // Add to local array only once
             this.customers.push(customerData);
 
-            // Generate QR code
-            await this.generateAndStoreQRCode(docRef.id, customerData);
+            // Generate QR code (this might be causing the double issue)
+            try {
+                await this.generateAndStoreQRCode(docRef.id, customerData);
+            } catch (qrError) {
+                console.error('QR code generation failed:', qrError);
+                // Don't fail the entire customer creation if QR fails
+                showError('Customer added but QR code generation failed');
+            }
 
             // Add notification
             await this.addNotification('New Customer Added', `Added customer: ${customerData.name}`, 'success');
@@ -431,11 +445,15 @@ class AquaFlowApp {
             this.loadCustomerSelect();
             this.updateDashboard();
             
-            showSuccess('Customer added successfully! QR code generated.');
+            showSuccess('Customer added successfully!');
             
         } catch (error) {
             console.error('Error adding customer:', error);
             showError('Failed to add customer');
+        } finally {
+            // Re-enable the button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
         }
     }
 
@@ -579,7 +597,7 @@ class AquaFlowApp {
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             
             // Get API key from Remote Config
-            const apiKey = getImgBBApiKey();
+            const apiKey = await getImgBBApiKey();
             if (!apiKey) {
                 throw new Error('ImgBB API Key not configured. Please contact support.');
             }
@@ -589,6 +607,7 @@ class AquaFlowApp {
             formData.append('image', blob);
             formData.append('key', apiKey);
 
+            console.log('Uploading QR code to ImgBB...');
             const response = await fetch('https://api.imgbb.com/1/upload', {
                 method: 'POST',
                 body: formData
@@ -597,6 +616,7 @@ class AquaFlowApp {
             const result = await response.json();
             
             if (result.success) {
+                console.log('QR code uploaded successfully:', result.data.url);
                 // Store QR code URL in customer document
                 await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update({
                     qrCodeUrl: result.data.url,
@@ -610,7 +630,7 @@ class AquaFlowApp {
             
         } catch (error) {
             console.error('Error generating QR code:', error);
-            showError('Customer added but QR code generation failed: ' + error.message);
+            throw error; // Re-throw to handle in calling function
         }
     }
 
