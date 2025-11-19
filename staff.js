@@ -51,51 +51,66 @@ class StaffApp {
         }
     }
 
-    async checkAuthentication() {
-        const user = authManager.getCurrentUser();
-        this.userData = authManager.getUserData(); 
-        
-        console.log('Staff Auth check - User:', user ? 'present' : 'absent', 'UserData:', this.userData ? 'loaded' : 'missing');
-        
-        if (!user) {
-            console.log('No user found, redirecting to auth.html');
-            window.location.replace('auth.html');
-            return false;
-        }
+   async checkAuthentication() {
+    console.log('Staff App: Starting authentication check...');
+    
+    const user = authManager.getCurrentUser();
+    this.userData = authManager.getUserData(); 
+    
+    console.log('Staff Auth check - User:', user ? 'present' : 'absent', 'UserData:', this.userData ? 'loaded' : 'missing');
+    
+    if (!user) {
+        console.log('No user found, redirecting to auth.html');
+        window.location.replace('auth.html');
+        return false;
+    }
 
-        // CRITICAL FIX: Load user data if missing (prevents redirect loops on mobile)
-        if (!this.userData) {
-            console.log('User data missing in Staff App, attempting to load directly...');
+    // CRITICAL FIX: Load user data if missing with retry logic
+    if (!this.userData || !this.userData.role) {
+        console.log('Staff: User data missing, loading directly...');
+        let attempts = 0;
+        const maxAttempts = 3;
+        
+        while (attempts < maxAttempts && (!this.userData || !this.userData.role)) {
             await authManager.loadUserData(user);
             this.userData = authManager.getUserData();
+            attempts++;
+            
+            if (!this.userData || !this.userData.role) {
+                console.log(`Staff: Retry ${attempts}/${maxAttempts} for user data`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
         }
-        
-        // Double check after load attempt
-        if (!this.userData) {
-             console.error('CRITICAL: User data unavailable in Staff App.');
-             // Don't redirect immediately to loop, show error
-             showError("Failed to load user profile. Please check internet.");
-             return false;
-        }
-        
-        if (this.userData.role !== 'staff') {
-            console.log('Not a staff user, redirecting to main app');
-            window.location.replace('app.html');
-            return false;
-        }
-        
-        this.authUserId = user.uid;
-        this.userId = this.userData.ownerId; // Business Owner ID
-        
-        if (!this.userId) {
-            showError('Configuration Error: Staff account has no linked Business Owner.');
-            return false;
-        }
-
-        // Fetch owner settings for business name
-        await this.fetchOwnerSettings();
-        return true;
     }
+    
+    // Double check after load attempt
+    if (!this.userData || !this.userData.role) {
+        console.error('CRITICAL: Staff User data unavailable after retries.');
+        showError("Failed to load staff profile. Please check internet and try again.");
+        // Don't redirect to prevent loops - let user manually logout
+        return false;
+    }
+    
+    if (this.userData.role !== 'staff') {
+        console.log('Not a staff user, redirecting to main app');
+        window.location.replace('app.html');
+        return false;
+    }
+    
+    this.authUserId = user.uid;
+    this.userId = this.userData.ownerId; // Business Owner ID
+    
+    if (!this.userId) {
+        showError('Configuration Error: Staff account has no linked Business Owner.');
+        return false;
+    }
+
+    console.log('Staff authentication check passed');
+    
+    // Fetch owner settings for business name
+    await this.fetchOwnerSettings();
+    return true;
+}
 
     async fetchOwnerSettings() {
         try {
