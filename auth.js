@@ -22,13 +22,10 @@ class AuthManager {
                 // User is signed in
                 const userDataLoaded = await this.loadUserData(user);
                 
-                // CRITICAL FIX: Only redirect if we're on auth page AND user data is successfully loaded
+                // Redirect if on auth page AND user data is loaded
                 if (window.location.pathname.includes('auth.html') && userDataLoaded) {
                     console.log('Redirecting to app.html - User authenticated with data');
                     window.location.href = 'app.html';
-                } else if (window.location.pathname.includes('auth.html') && !userDataLoaded) {
-                    console.log('User authenticated but data missing - staying on auth page');
-                    // Don't redirect if data is missing
                 }
             } else {
                 // User is signed out
@@ -56,6 +53,12 @@ class AuthManager {
     if (signupForm) {
         signupForm.addEventListener('submit', (e) => this.handleSignup(e));
         this.setupInputValidation(signupForm);
+    }
+
+    // Reset Password form
+    const resetForm = document.getElementById('resetForm');
+    if (resetForm) {
+        resetForm.addEventListener('submit', (e) => this.handlePasswordReset(e));
     }
 }
 
@@ -133,20 +136,15 @@ clearInputError(input) {
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     
-    // Validate inputs
-    const emailValid = this.validateInput(document.getElementById('loginEmail'));
-    const passwordValid = this.validateInput(document.getElementById('loginPassword'));
-    
-    if (!emailValid || !passwordValid) {
+    if (!this.validateInput(document.getElementById('loginEmail')) || 
+        !this.validateInput(document.getElementById('loginPassword'))) {
         return;
     }
     
     try {
         this.setFormLoading('loginForm', true);
-        
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        await auth.signInWithEmailAndPassword(email, password);
         showSuccess('Welcome back!');
-        
     } catch (error) {
         console.error('Login error:', error);
         this.handleAuthError(error);
@@ -155,6 +153,38 @@ clearInputError(input) {
     }
 }
 
+    // Handle Password Reset
+    async handlePasswordReset(e) {
+        e.preventDefault();
+        const emailInput = document.getElementById('resetEmail');
+        const email = emailInput.value;
+
+        if (!this.isValidEmail(email)) {
+            this.showInputError(emailInput, 'Please enter a valid email');
+            return;
+        }
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+        try {
+            await auth.sendPasswordResetEmail(email);
+            showSuccess('Password reset link sent to your email!');
+            // Switch back to login after short delay
+            setTimeout(() => {
+                showTab('login');
+                emailInput.value = '';
+            }, 3000);
+        } catch (error) {
+            console.error('Reset error:', error);
+            this.handleAuthError(error);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    }
 
    async handleSignup(e) {
         e.preventDefault();
@@ -182,9 +212,7 @@ clearInputError(input) {
             }
         });
         
-        if (!allValid) {
-            return;
-        }
+        if (!allValid) return;
         
         try {
             this.setFormLoading('signupForm', true);
@@ -193,53 +221,45 @@ clearInputError(input) {
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
             
+            // Send Email Verification Link
+            try {
+                await user.sendEmailVerification();
+                console.log('Verification email sent');
+            } catch (emailError) {
+                console.error('Error sending verification email:', emailError);
+            }
+
             console.log('User account created:', user.uid);
-            
-            // CRITICAL FIX: Add delay to ensure auth state is propagated
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             
-            // CRITICAL FIX: Better error handling for Firestore write
             try {
-                console.log('Writing user data to Firestore...');
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
-                    businessName: businessName,
-                    ownerName: ownerName,
-                    businessPhone: businessPhone,
-                    businessAddress: businessAddress,
-                    email: email,
-                    defaultPrice: defaultPrice,
+                    businessName,
+                    ownerName,
+                    businessPhone,
+                    businessAddress,
+                    email,
+                    defaultPrice,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     subscription: 'free',
                     status: 'active'
                 });
-                console.log('User data successfully written to Firestore');
             } catch (firestoreError) {
                 console.error('Firestore write error:', firestoreError);
-                // If Firestore fails, delete the user account to maintain consistency
-                await user.delete();
+                await user.delete(); // Rollback
                 throw new Error('Failed to create business profile. Please try again.');
             }
 
-            // CRITICAL FIX: Force reload user data and verify it exists
-            console.log('Verifying user data was written...');
             const userDataLoaded = await this.loadUserData(user);
+            if (!userDataLoaded) throw new Error('User data verification failed.');
             
-            if (!userDataLoaded) {
-                throw new Error('User data verification failed. Please try signing in again.');
-            }
+            showSuccess('Account created! Please verify your email before logging in.');
             
-            showSuccess('Business account created successfully! Redirecting...');
-            
-            // CRITICAL FIX: Manual redirect after successful verification
             setTimeout(() => {
                 if (this.userData) {
-                    console.log('Manual redirect to app.html after successful signup');
                     window.location.href = 'app.html';
-                } else {
-                    console.error('Cannot redirect - user data still missing');
-                    showError('Account created but data issue detected. Please sign in manually.');
                 }
             }, 2000);
             
@@ -252,64 +272,41 @@ clearInputError(input) {
     }
 
     setFormLoading(formId, isLoading) {
-    const form = document.getElementById(formId);
-    const submitBtn = form.querySelector('button[type="submit"]');
-    
-    if (isLoading) {
-        form.classList.add('loading');
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-    } else {
-        form.classList.remove('loading');
-        submitBtn.disabled = false;
-        
-        // Reset button text based on form type
-        if (formId === 'loginForm') {
-            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In to Your Business';
+        const form = document.getElementById(formId);
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if(!form) return;
+
+        if (isLoading) {
+            form.classList.add('loading');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
         } else {
-            submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Business Account';
+            form.classList.remove('loading');
+            submitBtn.disabled = false;
+            if (formId === 'loginForm') submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In to Your Business';
+            else if (formId === 'signupForm') submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Business Account';
         }
     }
-}
     
      async loadUserData(user) {
         try {
-            console.log('Loading user data for:', user.uid);
-            
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            console.log('Using appId:', appId);
-            
-            const userDocRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid);
-            const userDoc = await userDocRef.get();
-            
-            console.log('Document exists:', userDoc.exists);
+            const userDoc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
             
             if (userDoc.exists) {
                 this.userData = userDoc.data();
                 this.userData.uid = user.uid;
-                
                 localStorage.setItem('userData', JSON.stringify(this.userData));
-                console.log('User data loaded successfully:', this.userData.businessName);
                 return true;
-            } else {
-                console.error('User document does not exist in Firestore');
-                this.userData = null;
-                localStorage.removeItem('userData');
-                return false;
             }
+            return false;
         } catch (error) {
             console.error('Error loading user data:', error);
-            console.error('Error code:', error.code);
-            console.error('Error message:', error.message);
-            
-            this.userData = null;
-            localStorage.removeItem('userData');
             return false;
         }
     }
 
     updateUI() {
-        // Update business name in header
         const businessNameElement = document.getElementById('businessName');
         if (businessNameElement && this.userData) {
             businessNameElement.textContent = this.userData.businessName;
@@ -339,7 +336,6 @@ clearInputError(input) {
                 message = 'Network error. Please check your internet connection.';
                 break;
             default:
-                // Handle custom errors from our code
                 if (error.message.includes('Firestore write error') || error.message.includes('verification failed')) {
                     message = error.message;
                 }
@@ -364,41 +360,27 @@ clearInputError(input) {
         return this.currentUser;
     }
 
- // CRITICAL FIX: Enhanced getUserData with better error handling
     getUserData() {
-        // First return instance data if available
-        if (this.userData) {
-            return this.userData;
-        }
-        
-        // Then check localStorage as fallback
+        if (this.userData) return this.userData;
         const storedData = localStorage.getItem('userData');
         if (storedData) {
             try {
                 this.userData = JSON.parse(storedData);
-                console.log('User data loaded from localStorage');
                 return this.userData;
             } catch (e) {
-                console.error('Failed to parse user data from localStorage', e);
                 localStorage.removeItem('userData');
                 return null;
             }
         }
-        
-        console.log('No user data available in memory or localStorage');
         return null;
     }
 
-    // CRITICAL FIX: Add method to check if auth state is ready
     isAuthStateReady() {
         return this.authStateReady;
     }
 }
 
-// Initialize auth manager
 const authManager = new AuthManager();
-    
-// Global logout function
 function logout() {
     authManager.logout();
 }
