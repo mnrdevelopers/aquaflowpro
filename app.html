@@ -13,9 +13,9 @@
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
 </head>
 <body class="app-page">
     <!-- Header -->
@@ -24,7 +24,6 @@
             <div class="header-left">
                 <div class="business-info">
                     <h1 id="businessName">AquaFlow Pro</h1>
-                    <span id="userRoleBadge" class="badge" style="display:none; font-size: 0.7rem; margin-top: 2px;"></span>
                     <span class="status-online" id="connectionStatus">
                         <i class="fas fa-circle"></i> Online
                     </span>
@@ -80,7 +79,7 @@
                     </div>
                 </div>
                 
-                <div class="stat-card" data-role="owner">
+                <div class="stat-card">
                     <div class="stat-content">
                         <div class="stat-number" id="monthlyRevenue">₹0</div>
                         <div class="stat-label">This Month</div>
@@ -99,7 +98,7 @@
                         <i class="fas fa-user-plus"></i>
                         Add Customer
                     </button>
-                    <button class="quick-action-btn" onclick="showView('billing')" data-role="owner">
+                    <button class="quick-action-btn" onclick="showView('billing')">
                         <i class="fas fa-file-invoice"></i>
                         Generate Bills
                     </button>
@@ -107,7 +106,7 @@
                         <i class="fas fa-users"></i>
                         View Customers
                     </button>
-                    <button class="quick-action-btn" onclick="showView('reports')" data-role="owner">
+                    <button class="quick-action-btn" onclick="showView('reports')">
                         <i class="fas fa-chart-bar"></i>
                         Reports
                     </button>
@@ -176,7 +175,7 @@
         </section>
 
         <!-- Billing View -->
-        <section id="billingView" class="view" data-role="owner">
+        <section id="billingView" class="view">
             <div class="view-header">
                 <button class="btn btn-back" onclick="showView('dashboard')">
                     <i class="fas fa-arrow-left"></i>
@@ -209,7 +208,7 @@
         </section>
 
         <!-- Reports View -->
-        <section id="reportsView" class="view" data-role="owner">
+        <section id="reportsView" class="view">
             <div class="view-header">
                 <button class="btn btn-back" onclick="showView('dashboard')">
                     <i class="fas fa-arrow-left"></i>
@@ -382,7 +381,7 @@
                 </div>
                 
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-danger" onclick="app.confirmDeleteDelivery()" data-role="owner">
+                    <button type="button" class="btn btn-danger" onclick="app.confirmDeleteDelivery()">
                         <i class="fas fa-trash"></i> Delete Entry
                     </button>
                     <button type="submit" class="btn btn-primary">
@@ -445,7 +444,7 @@
                     <button class="btn btn-primary" onclick="editCustomerFromDetails()">
                         <i class="fas fa-edit"></i> Edit Customer
                     </button>
-                    <button class="btn btn-danger" onclick="deleteCustomerFromDetails()" data-role="owner">
+                    <button class="btn btn-danger" onclick="deleteCustomerFromDetails()">
                         <i class="fas fa-trash"></i> Delete Customer
                     </button>
                 </div>
@@ -534,18 +533,8 @@
             <div class="settings-content">
                 <form id="settingsForm" onsubmit="saveSettings(event)">
                     <!-- Owner Only Settings -->
-                    <div class="setting-section" data-role="owner">
+                    <div class="setting-section">
                         <h4>Business Information</h4>
-                         <div class="setting-item">
-                            <label>Business ID (Share with Staff)</label>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="text" id="settingsBusinessId" class="form-input" readonly style="background: var(--gray-100); font-family: monospace;">
-                                <button type="button" class="btn btn-secondary" onclick="copyBusinessId()">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                            </div>
-                            <p class="text-sm text-muted">Staff need this ID to join your business.</p>
-                        </div>
                         <div class="setting-item">
                             <label>Business Name</label>
                             <input type="text" id="settingsBusinessName" class="form-input">
@@ -607,12 +596,12 @@
             </button>
         </div>
         
-        <button class="nav-item" onclick="showView('billing')" data-role="owner">
+        <button class="nav-item" onclick="showView('billing')">
             <i class="fas fa-file-invoice"></i>
             <span>Billing</span>
         </button>
         
-        <button class="nav-item" onclick="showView('reports')" data-role="owner">
+        <button class="nav-item" onclick="showView('reports')">
             <i class="fas fa-chart-bar"></i>
             <span>Reports</span>
         </button>
@@ -630,17 +619,5 @@
     <!-- QR Code Generation Library -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
     
-    <script>
-        function copyBusinessId() {
-            const input = document.getElementById('settingsBusinessId');
-            input.select();
-            document.execCommand('copy');
-            // Simple feedback
-            const btn = input.nextElementSibling;
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check"></i>';
-            setTimeout(() => btn.innerHTML = original, 2000);
-        }
-    </script>
 </body>
 </html>
