@@ -241,6 +241,32 @@ class AquaFlowApp {
         }
     }
 
+    // NEW: Added missing clearAllNotifications method
+    async clearAllNotifications() {
+        if (!confirm('Are you sure you want to clear all notifications?')) return;
+
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            if (!this.userId) return;
+
+            const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
+            const snapshot = await notificationsRef.get();
+
+            // Firestore batch delete (max 500 operations)
+            const batch = db.batch();
+            snapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+
+            await batch.commit();
+            await this.loadNotifications();
+            showSuccess('All notifications cleared');
+        } catch (error) {
+            console.error('Error clearing notifications:', error);
+            showError('Failed to clear notifications');
+        }
+    }
+
     updateNotificationBadge() {
         const unreadCount = this.notifications.filter(notification => !notification.read).length;
         const badge = document.getElementById('notificationCount');
