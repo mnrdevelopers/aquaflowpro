@@ -578,10 +578,16 @@ class AquaFlowApp {
             // Convert canvas to blob
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             
-            // Upload to ImgBB
+            // Get API key from Remote Config
+            const apiKey = getImgBBApiKey();
+            if (!apiKey) {
+                throw new Error('ImgBB API Key not configured. Please contact support.');
+            }
+            
+            // Upload to ImgBB using Remote Config API key
             const formData = new FormData();
             formData.append('image', blob);
-            formData.append('key', IMGBB_API_KEY);
+            formData.append('key', apiKey);
 
             const response = await fetch('https://api.imgbb.com/1/upload', {
                 method: 'POST',
