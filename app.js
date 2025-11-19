@@ -2,15 +2,21 @@
 class AquaFlowApp {
     constructor() {
         this.customers = [];
+        this.filteredCustomers = []; // New: Separate array for filtering/pagination
         this.deliveries = [];
         this.notifications = [];
-        this.payments = []; // New: Track payments locally
+        this.payments = []; 
         this.currentView = 'dashboard';
         this.scannerActive = false;
         this.currentCustomerId = null;
         this.userId = null;
         this.userData = null;
         this.html5QrCode = null;
+        
+        // Pagination State
+        this.currentPage = 1;
+        this.itemsPerPage = 10;
+
         this.init();
     }
 
@@ -102,9 +108,9 @@ class AquaFlowApp {
         // Use Promise.all to load data concurrently and provide better user experience
         await Promise.all([
             this.loadCustomers(),
-            this.loadCurrentMonthDeliveries(), // Changed to load whole month
+            this.loadCurrentMonthDeliveries(), 
             this.loadNotifications(),
-            this.loadPayments() // New: Load payment history
+            this.loadPayments() 
         ]);
         this.updateDashboard();
         
@@ -113,15 +119,12 @@ class AquaFlowApp {
 
     async loadCustomers() {
         try {
-            // Use the global __app_id variable for Firestore path
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             
-            // Ensure this.userId is defined before querying
             if (!this.userId) {
                 throw new Error('User ID is undefined. Cannot load customers.');
             }
             
-            // CRITICAL FIX: Use the secure, Canvas-compliant Firestore path
             const customersCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers');
             
             const snapshot = await customersCollectionRef
@@ -133,6 +136,9 @@ class AquaFlowApp {
                 ...doc.data()
             }));
             
+            // Initialize filtered list with all customers
+            this.filteredCustomers = [...this.customers];
+
             this.displayCustomers();
             this.loadCustomerSelect();
             
@@ -142,7 +148,6 @@ class AquaFlowApp {
         }
     }
 
-    // Renamed and Updated to load entire current month for accurate Reports/Billing
     async loadCurrentMonthDeliveries() {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -155,12 +160,10 @@ class AquaFlowApp {
             
             const currentMonth = getCurrentMonth();
             
-            // FIX: Query by 'month' string which is stored on delivery (e.g. "2023-10")
-            // This ensures we get ALL deliveries for the current month, not just last 7 days
             const snapshot = await deliveriesCollectionRef
                 .where('month', '==', currentMonth)
                 .orderBy('timestamp', 'desc')
-                .limit(500) // Safety limit
+                .limit(500) 
                 .get();
             
             this.deliveries = snapshot.docs.map(doc => ({
@@ -200,7 +203,6 @@ class AquaFlowApp {
         }
     }
 
-    // NEW: Load Payments
     async loadPayments() {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -208,7 +210,6 @@ class AquaFlowApp {
 
             const paymentsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('payments');
             
-            // Load recent payments
             const snapshot = await paymentsRef
                 .orderBy('paidAt', 'desc')
                 .limit(100)
@@ -238,7 +239,6 @@ class AquaFlowApp {
 
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications').add(notificationData);
             
-            // Reload notifications
             await this.loadNotifications();
             
         } catch (error) {
@@ -331,60 +331,120 @@ class AquaFlowApp {
         return date.toLocaleDateString();
     }
 
-    // Customer Management
+    // Customer Management - TABLE VIEW WITH PAGINATION
     displayCustomers() {
         const container = document.getElementById('customersList');
         if (!container) return;
 
-        if (this.customers.length === 0) {
+        if (this.filteredCustomers.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-users"></i>
-                    <h3>No Customers Yet</h3>
-                    <p>Add your first customer to start managing deliveries</p>
+                    <h3>No Customers Found</h3>
+                    <p>Try adjusting your search or add a new customer.</p>
                     <button class="btn btn-primary" onclick="showAddCustomerModal()">
-                        <i class="fas fa-user-plus"></i> Add First Customer
+                        <i class="fas fa-user-plus"></i> Add Customer
                     </button>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = this.customers.map(customer => {
-            // FIX: Use the aggregated totalCans from the customer document
-            // Fallback to 0 if it doesn't exist yet
+        // Pagination Logic
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const pageCustomers = this.filteredCustomers.slice(startIndex, endIndex);
+        const totalPages = Math.ceil(this.filteredCustomers.length / this.itemsPerPage);
+
+        // Table Generation
+        let html = `
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Contact</th>
+                            <th>Stats</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        html += pageCustomers.map(customer => {
             const totalCans = customer.totalCans || 0;
-            
             const price = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 'N/A');
             
             return `
-                <div class="customer-card">
-                    <div class="customer-header">
-                        <div class="customer-name">${customer.name}</div>
-                        <span class="customer-type">${this.getCustomerTypeIcon(customer.type)}</span>
-                    </div>
-                    <div class="customer-details">
-                        <div><i class="fas fa-phone"></i> ${customer.phone}</div>
-                        <div><i class="fas fa-map-marker-alt"></i> ${customer.address}</div>
-                        <div><i class="fas fa-tint"></i> <strong>${totalCans}</strong> total cans delivered • ₹${price}/can</div>
-                    </div>
-                    <div class="customer-actions">
-                        <button class="btn btn-primary" onclick="quickDelivery('${customer.id}')">
-                            <i class="fas fa-truck"></i> Deliver
-                        </button>
-                        <button class="btn btn-secondary" onclick="generateCustomerQR('${customer.id}')">
-                            <i class="fas fa-qrcode"></i> QR Code
-                        </button>
-                        <button class="btn btn-outline" onclick="viewCustomerDetails('${customer.id}')">
-                            <i class="fas fa-eye"></i> View
-                        </button>
-                        <button class="btn btn-outline" onclick="editCustomer('${customer.id}')">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
-                    </div>
-                </div>
+                <tr>
+                    <td class="fw-bold">${customer.name}</td>
+                    <td><span class="customer-type badge">${this.getCustomerTypeIcon(customer.type)}</span></td>
+                    <td>
+                        <div class="text-sm"><i class="fas fa-phone text-muted"></i> ${customer.phone}</div>
+                        <div class="text-xs text-muted">${customer.address.substring(0, 20)}${customer.address.length > 20 ? '...' : ''}</div>
+                    </td>
+                    <td>
+                        <div class="text-sm"><strong>${totalCans}</strong> Cans</div>
+                        <div class="text-xs text-success">₹${price}/can</div>
+                    </td>
+                    <td>
+                        <div class="action-buttons-row">
+                            <button class="btn btn-sm btn-primary" onclick="quickDelivery('${customer.id}')" title="Deliver">
+                                <i class="fas fa-truck"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="generateCustomerQR('${customer.id}')" title="QR Code">
+                                <i class="fas fa-qrcode"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="viewCustomerDetails('${customer.id}')" title="Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="editCustomer('${customer.id}')" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
             `;
         }).join('');
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        // Pagination Controls
+        if (totalPages > 0) {
+            html += `
+                <div class="pagination-controls">
+                    <button class="btn btn-sm btn-secondary" ${this.currentPage === 1 ? 'disabled' : ''} onclick="app.changePage(-1)">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </button>
+                    <span class="page-info">Page ${this.currentPage} of ${totalPages}</span>
+                    <button class="btn btn-sm btn-secondary" ${this.currentPage >= totalPages ? 'disabled' : ''} onclick="app.changePage(1)">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    // Pagination Handler
+    changePage(delta) {
+        const totalPages = Math.ceil(this.filteredCustomers.length / this.itemsPerPage);
+        const newPage = this.currentPage + delta;
+        
+        if (newPage >= 1 && newPage <= totalPages) {
+            this.currentPage = newPage;
+            this.displayCustomers();
+            
+            // Scroll to top of list gently
+            const view = document.getElementById('customersView');
+            if(view) view.scrollTop = 0;
+        }
     }
 
     getCustomerTypeIcon(type) {
@@ -399,22 +459,20 @@ class AquaFlowApp {
     }
 
     filterCustomers(searchTerm) {
-        const filtered = this.customers.filter(customer =>
-            customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            customer.phone.includes(searchTerm) ||
-            customer.address.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        
-        const container = document.getElementById('customersList');
-        if (filtered.length === 0) {
-            container.innerHTML = '<div class="empty-state">No customers found matching your search</div>';
-            return;
+        if (!searchTerm) {
+            this.filteredCustomers = [...this.customers];
+        } else {
+            const lower = searchTerm.toLowerCase();
+            this.filteredCustomers = this.customers.filter(customer =>
+                customer.name.toLowerCase().includes(lower) ||
+                customer.phone.includes(searchTerm) ||
+                customer.address.toLowerCase().includes(lower)
+            );
         }
-
-        const originalCustomers = this.customers;
-        this.customers = filtered;
+        
+        // Reset to first page on search
+        this.currentPage = 1;
         this.displayCustomers();
-        this.customers = originalCustomers;
     }
 
     async addCustomer(e) {
@@ -430,7 +488,7 @@ class AquaFlowApp {
             pricePerCan: parseInt(document.getElementById('customerPrice').value) || (this.userData ? this.userData.defaultPrice : 20),
             userId: this.userId,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            totalCans: 0, // Initialize counters
+            totalCans: 0, 
             totalDeliveries: 0
         };
         
@@ -450,7 +508,9 @@ class AquaFlowApp {
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').add(customerData);
             customerData.id = docRef.id;
             
+            // Add to arrays
             this.customers.push(customerData);
+            this.filteredCustomers.push(customerData); // Also add to filtered list
 
             try {
                 await this.generateAndStoreQRCode(docRef.id, customerData);
@@ -463,6 +523,10 @@ class AquaFlowApp {
 
             e.target.reset();
             this.closeModal('addCustomerModal');
+            
+            // Refresh display (go to last page or stay on current?)
+            // Usually better to reload customer list to show new addition
+            this.filterCustomers(''); // Reset filter
             this.displayCustomers();
             this.loadCustomerSelect();
             this.updateDashboard();
@@ -496,10 +560,16 @@ class AquaFlowApp {
         try {
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).update(customerData);
             
+            // Update in main array
             const customerIndex = this.customers.findIndex(c => c.id === customerId);
             if (customerIndex !== -1) {
-                // Preserve existing counters when updating info
                 this.customers[customerIndex] = { ...this.customers[customerIndex], ...customerData };
+            }
+
+            // Update in filtered array
+            const filteredIndex = this.filteredCustomers.findIndex(c => c.id === customerId);
+            if (filteredIndex !== -1) {
+                this.filteredCustomers[filteredIndex] = { ...this.filteredCustomers[filteredIndex], ...customerData };
             }
 
             await this.addNotification('Customer Updated', `Updated customer: ${customerData.name}`, 'info');
@@ -536,6 +606,7 @@ class AquaFlowApp {
             await Promise.all(deletePromises);
 
             this.customers = this.customers.filter(c => c.id !== customerId);
+            this.filteredCustomers = this.filteredCustomers.filter(c => c.id !== customerId);
             this.deliveries = this.deliveries.filter(d => d.customerId !== customerId);
 
             await this.addNotification('Customer Deleted', `Deleted customer: ${customer.name}`, 'warning');
@@ -660,7 +731,6 @@ class AquaFlowApp {
         this.stopScanner();
     }
 
-    // Added fallback dynamic loader
     loadQRScript() {
         return new Promise((resolve, reject) => {
             if (typeof Html5Qrcode !== 'undefined') {
@@ -681,7 +751,6 @@ class AquaFlowApp {
 
     async initializeScanner() {
         try {
-            // Wait for script to be available
             await this.loadQRScript();
 
             if (typeof Html5Qrcode === 'undefined') {
@@ -720,21 +789,6 @@ class AquaFlowApp {
 
     handleScannerError(error) {
         let errorMessage = 'Failed to start camera. ';
-        
-        if (error.name === 'NotAllowedError') {
-            errorMessage += 'Camera access was denied. Please allow camera permissions and try again.';
-        } else if (error.name === 'NotFoundError') {
-            errorMessage += 'No camera found on this device.';
-        } else if (error.name === 'NotSupportedError') {
-            errorMessage += 'Camera not supported in this browser.';
-        } else if (error.name === 'NotReadableError') {
-            errorMessage += 'Camera is already in use by another application.';
-        } else if (error.message === 'QR Scanner library not loaded') {
-            errorMessage = 'QR Scanner not available. Please check your internet connection and refresh the page.';
-        } else {
-            errorMessage += 'Please try again or use manual entry.';
-        }
-        
         showError(errorMessage);
         this.showManualEntryOption();
     }
@@ -825,21 +879,24 @@ class AquaFlowApp {
                 userId: this.userId
             };
 
-            // 1. Add delivery record
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('deliveries').add(deliveryData);
             
-            // 2. FIX: Update customer Total Cans and Total Deliveries counters atomically
             const customerRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(this.currentCustomerId);
             await customerRef.update({
                 totalCans: firebase.firestore.FieldValue.increment(quantity),
                 totalDeliveries: firebase.firestore.FieldValue.increment(1)
             });
 
-            // Update local state for immediate UI feedback
             const customer = this.customers.find(c => c.id === this.currentCustomerId);
             if (customer) {
                 customer.totalCans = (customer.totalCans || 0) + quantity;
                 customer.totalDeliveries = (customer.totalDeliveries || 0) + 1;
+            }
+
+            // Also update in filtered array to reflect changes immediately
+            const filteredCust = this.filteredCustomers.find(c => c.id === this.currentCustomerId);
+            if (filteredCust) {
+                filteredCust.totalCans = (filteredCust.totalCans || 0) + quantity;
             }
 
             await this.addNotification('Delivery Recorded', `Delivered ${quantity} can(s) to ${customer?.name || 'customer'}`, 'delivery');
@@ -847,10 +904,9 @@ class AquaFlowApp {
             showSuccess(`Delivery recorded: ${quantity} can(s) delivered`);
             this.closeScanner();
             
-            // Reload data to ensure consistency
             await this.loadCurrentMonthDeliveries();
             this.updateDashboard();
-            this.displayCustomers(); // Refresh customer list to show new totals
+            this.displayCustomers(); 
             
         } catch (error) {
             console.error('Error recording delivery:', error);
@@ -1059,7 +1115,6 @@ class AquaFlowApp {
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) return null;
 
-        // Use local deliveries array which now contains full month data
         const monthlyDeliveries = this.deliveries.filter(d => 
             d.customerId === customerId && d.month === month
         );
@@ -1071,7 +1126,6 @@ class AquaFlowApp {
         const pricePerCan = customer.pricePerCan || (this.userData ? this.userData.defaultPrice : 20);
         const totalAmount = totalCans * pricePerCan;
 
-        // Check if already paid
         const isPaid = this.payments.some(p => 
             p.customerId === customerId && p.month === month
         );
@@ -1136,7 +1190,6 @@ class AquaFlowApp {
         results.classList.remove('hidden');
     }
 
-    // NEW: Mark bill as paid
     async markBillPaid(customerId, month, amount) {
         if (!confirm(`Mark bill as paid for ${month}? Amount: ${formatCurrency(amount)}`)) return;
 
@@ -1153,14 +1206,12 @@ class AquaFlowApp {
 
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('payments').add(paymentData);
             
-            // Update local state
             this.payments.push(paymentData);
             
             await this.addNotification('Payment Received', `Payment of ${formatCurrency(amount)} received for ${month}`, 'payment');
             
             showSuccess('Payment recorded successfully!');
             
-            // Refresh bills display
             this.generateBills();
             
         } catch (error) {
@@ -1169,14 +1220,12 @@ class AquaFlowApp {
         }
     }
 
-    // NEW: Generate Reports
     generateReports() {
         const monthlyReport = document.getElementById('monthlyReport');
         const topCustomersReport = document.getElementById('topCustomersReport');
         
         if (!monthlyReport || !topCustomersReport) return;
 
-        // 1. Monthly Performance Report
         const currentMonth = getCurrentMonth();
         const monthlyDeliveries = this.deliveries.filter(d => d.month === currentMonth);
         const totalMonthlyCans = monthlyDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
@@ -1206,7 +1255,6 @@ class AquaFlowApp {
             </div>
         `;
 
-        // 2. Top Customers Report
         const sortedCustomers = [...this.customers]
             .sort((a, b) => (b.totalCans || 0) - (a.totalCans || 0))
             .slice(0, 5);
@@ -1235,9 +1283,6 @@ class AquaFlowApp {
         }
     }
 
-    // ... (Existing methods: saveSettings, showModal, closeModal, updateUI)
-    
-    // NEW METHOD: Save settings to Firestore
     async saveSettings(e) {
         e.preventDefault();
         const businessName = document.getElementById('settingsBusinessName').value;
@@ -1251,7 +1296,6 @@ class AquaFlowApp {
                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
              });
              
-             // Update local state
              if (this.userData) {
                  this.userData.businessName = businessName;
                  this.userData.defaultPrice = defaultPrice;
@@ -1268,7 +1312,6 @@ class AquaFlowApp {
         }
     }
 
-    // Utility Functions
     showModal(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) modal.classList.remove('hidden');
@@ -1280,13 +1323,11 @@ class AquaFlowApp {
     }
 
     updateUI() {
-        // Update business name
         const businessNameElement = document.getElementById('businessName');
         if (businessNameElement && this.userData) {
             businessNameElement.textContent = this.userData.businessName;
         }
         
-        // Update settings modal inputs
         const settingsBusinessName = document.getElementById('settingsBusinessName');
         const settingsDefaultPrice = document.getElementById('settingsDefaultPrice');
         if (settingsBusinessName && this.userData) {
@@ -1296,12 +1337,10 @@ class AquaFlowApp {
             settingsDefaultPrice.value = this.userData.defaultPrice || 20;
         }
         
-        // Show the initial view
         this.showView(this.currentView);
     }
 }
 
-// Global functions for HTML event handlers
 let app;
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1416,78 +1455,7 @@ function quickDelivery(customerId) {
 }
 
 async function generateCustomerQR(customerId) {
-    try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('customers').doc(customerId).get();
-        if (!customerDoc.exists) {
-            showError('Customer not found.');
-            return;
-        }
-
-        const customer = customerDoc.data();
-        
-        if (!customer.qrCodeUrl) {
-            showError('QR code not generated yet. Please wait or contact support.');
-            return;
-        }
-
-        // Open QR code in new window for printing
-        const qrWindow = window.open('', '_blank');
-        qrWindow.document.write(`
-            <html>
-                <head>
-                    <title>QR Code - ${customer.name}</title>
-                    <style>
-                        body { 
-                            font-family: Arial, sans-serif; 
-                            text-align: center; 
-                            padding: 2rem;
-                            background: white;
-                        }
-                        .qr-container { 
-                            margin: 2rem auto; 
-                            max-width: 400px;
-                        }
-                        .customer-info {
-                            margin-bottom: 2rem;
-                            padding: 1rem;
-                            background: #f8f9fa;
-                            border-radius: 8px;
-                        }
-                        .print-btn {
-                            background: #0066ff;
-                            color: white;
-                            padding: 12px 24px;
-                            border: none;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            font-size: 16px;
-                            margin-top: 1rem;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <h2>${customer.name} - Delivery QR Code</h2>
-                    <div class="customer-info">
-                        <p><strong>Phone:</strong> ${customer.phone}</p>
-                        <p><strong>Address:</strong> ${customer.address}</p>
-                        <p><strong>Type:</strong> ${customer.type}</p>
-                    </div>
-                    <div class="qr-container">
-                        <img src="${customer.qrCodeUrl}" alt="QR Code" style="max-width: 100%; border: 2px solid #333; padding: 1rem; background: white;">
-                        <p><small>Scan this QR code at customer's location to record delivery</small></p>
-                    </div>
-                    <button class="print-btn" onclick="window.print()">Print QR Code</button>
-                </body>
-            </html>
-        `);
-        qrWindow.document.close();
-        
-    } catch (error) {
-        console.error('Error displaying QR code:', error);
-        showError('Failed to display QR code.');
-    }
+    if (app) app.generateCustomerQR(customerId);
 }
 
 function generateBills() {
@@ -1502,27 +1470,12 @@ function printBill(customerId, month) {
     window.print();
 }
 
-// CRUD Operations for Customers
 function viewCustomerDetails(customerId) {
     if (app) app.viewCustomerDetails(customerId);
 }
 
 function editCustomer(customerId) {
-    const customer = app.customers.find(c => c.id === customerId);
-    if (!customer) {
-        showError('Customer not found');
-        return;
-    }
-
-    // Populate edit form
-    document.getElementById('editCustomerId').value = customer.id;
-    document.getElementById('editCustomerName').value = customer.name;
-    document.getElementById('editCustomerPhone').value = customer.phone;
-    document.getElementById('editCustomerAddress').value = customer.address;
-    document.getElementById('editCustomerType').value = customer.type || 'home';
-    document.getElementById('editCustomerPrice').value = customer.pricePerCan || (app.userData ? app.userData.defaultPrice : 20);
-
-    app.showModal('editCustomerModal');
+    if (app) app.editCustomer(customerId);
 }
 
 function updateCustomer(e) {
@@ -1530,16 +1483,7 @@ function updateCustomer(e) {
 }
 
 function deleteCustomer(customerId) {
-    const customer = app.customers.find(c => c.id === customerId);
-    if (!customer) {
-        showError('Customer not found');
-        return;
-    }
-
-    // Show confirmation modal
-    document.getElementById('deleteCustomerName').textContent = customer.name;
-    document.getElementById('customerToDelete').value = customerId;
-    app.showModal('deleteConfirmModal');
+    if (app) app.deleteCustomer(customerId);
 }
 
 function confirmDeleteCustomer() {
@@ -1561,93 +1505,36 @@ function deleteCustomerFromDetails() {
     deleteCustomer(customerId);
 }
 
-// Notifications Functions - UPDATED TO FIX VIEW BUG
 function showNotifications() {
     if (app) {
-        // FIX: Pass 'notifications' instead of 'notificationsView' to avoid double 'View' suffix
         app.showView('notifications'); 
-        app.loadNotifications(); // Refresh data when opening
+        app.loadNotifications();
     }
 }
 
 async function markNotificationAsRead(notificationId) {
     try {
-        // FIX: Add safety check for app and userId
-        if (!app || !app.userId) {
-            console.error('App not initialized or user not logged in');
-            return;
-        }
-        
+        if (!app || !app.userId) return;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
         await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).update({
             read: true
         });
-
-        // Reload notifications
         await app.loadNotifications();
-        
-    } catch (error) {
-        console.error('Error marking notification as read:', error);
-        showError('Failed to mark notification as read');
-    }
+    } catch (error) { console.error(error); }
 }
 
 async function deleteNotification(notificationId) {
     try {
-        // FIX: Add safety check for app and userId
-        if (!app || !app.userId) {
-            console.error('App not initialized or user not logged in');
-            return;
-        }
-
+        if (!app || !app.userId) return;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
         await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).delete();
-
-        // Reload notifications
         await app.loadNotifications();
-        
-    } catch (error) {
-        console.error('Error deleting notification:', error);
-        showError('Failed to delete notification');
-    }
+    } catch (error) { console.error(error); }
 }
 
 async function clearAllNotifications() {
-    if (!confirm('Are you sure you want to clear all notifications? This action cannot be undone.')) {
-        return;
-    }
-
-    // FIX: Add safety check for app and userId
-    if (!app || !app.userId) {
-        console.error('App not initialized or user not logged in');
-        return;
-    }
-
-    try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications');
-        
-        const snapshot = await notificationsRef.get();
-        
-        // FIX: Use batch delete for efficiency and reliability
-        const batch = db.batch();
-        snapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        
-        await batch.commit();
-
-        // Reload notifications
-        await app.loadNotifications();
-        
-        showSuccess('All notifications cleared successfully!');
-        
-    } catch (error) {
-        console.error('Error clearing notifications:', error);
-        showError('Failed to clear notifications');
-    }
+    if (!app) return;
+    app.clearAllNotifications();
 }
 
 function showAllDeliveries() {
@@ -1658,7 +1545,6 @@ function showSettings() {
     if (app) app.showModal('settingsModal');
 }
 
-// GLOBAL FUNCTION FOR SAVING SETTINGS
 function saveSettings(e) {
     if (app) app.saveSettings(e);
 }
