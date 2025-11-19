@@ -660,8 +660,30 @@ class AquaFlowApp {
         this.stopScanner();
     }
 
+    // Added fallback dynamic loader
+    loadQRScript() {
+        return new Promise((resolve, reject) => {
+            if (typeof Html5Qrcode !== 'undefined') {
+                resolve();
+                return;
+            }
+            console.log('Loading QR script dynamically...');
+            const script = document.createElement('script');
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
+            script.onload = () => {
+                console.log('QR script loaded successfully');
+                resolve();
+            };
+            script.onerror = () => reject(new Error('Failed to load QR script'));
+            document.head.appendChild(script);
+        });
+    }
+
     async initializeScanner() {
         try {
+            // Wait for script to be available
+            await this.loadQRScript();
+
             if (typeof Html5Qrcode === 'undefined') {
                 throw new Error('QR Scanner library not loaded');
             }
@@ -698,7 +720,21 @@ class AquaFlowApp {
 
     handleScannerError(error) {
         let errorMessage = 'Failed to start camera. ';
-        // ... (Error handling logic remains same)
+        
+        if (error.name === 'NotAllowedError') {
+            errorMessage += 'Camera access was denied. Please allow camera permissions and try again.';
+        } else if (error.name === 'NotFoundError') {
+            errorMessage += 'No camera found on this device.';
+        } else if (error.name === 'NotSupportedError') {
+            errorMessage += 'Camera not supported in this browser.';
+        } else if (error.name === 'NotReadableError') {
+            errorMessage += 'Camera is already in use by another application.';
+        } else if (error.message === 'QR Scanner library not loaded') {
+            errorMessage = 'QR Scanner not available. Please check your internet connection and refresh the page.';
+        } else {
+            errorMessage += 'Please try again or use manual entry.';
+        }
+        
         showError(errorMessage);
         this.showManualEntryOption();
     }
