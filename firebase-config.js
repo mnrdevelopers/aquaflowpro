@@ -36,40 +36,60 @@ remoteConfig.defaultConfig = {
 
 // Global variable for ImgBB API Key
 let IMGBB_API_KEY = '';
+let remoteConfigInitialized = false;
+let remoteConfigPromise = null;
 
 // Function to fetch Remote Config
 async function fetchRemoteConfig() {
-    try {
-        console.log('Fetching Remote Config...');
-        await remoteConfig.fetchAndActivate();
-        IMGBB_API_KEY = remoteConfig.getString('imgbb_api_key');
-        
-        if (!IMGBB_API_KEY) {
-            console.error('ImgBB API Key not found in Remote Config');
-            showError('QR code generation is temporarily unavailable. Please contact support.');
-        } else {
-            console.log('Remote Config fetched successfully');
-            console.log('ImgBB API Key loaded from Remote Config');
-        }
-    } catch (error) {
-        console.error('Error fetching Remote Config:', error);
-        showError('Failed to load configuration. Please refresh the page.');
+    if (remoteConfigPromise) {
+        return remoteConfigPromise;
     }
+
+    remoteConfigPromise = new Promise(async (resolve, reject) => {
+        try {
+            console.log('Fetching Remote Config...');
+            await remoteConfig.fetchAndActivate();
+            IMGBB_API_KEY = remoteConfig.getString('imgbb_api_key');
+            
+            if (!IMGBB_API_KEY) {
+                console.error('ImgBB API Key not found in Remote Config');
+                reject(new Error('ImgBB API Key not configured'));
+            } else {
+                console.log('Remote Config fetched successfully');
+                remoteConfigInitialized = true;
+                resolve(IMGBB_API_KEY);
+            }
+        } catch (error) {
+            console.error('Error fetching Remote Config:', error);
+            reject(error);
+        }
+    });
+
+    return remoteConfigPromise;
 }
 
 // Initialize Remote Config when the app starts
 document.addEventListener('DOMContentLoaded', function() {
-    fetchRemoteConfig();
+    fetchRemoteConfig().catch(error => {
+        console.error('Failed to initialize Remote Config:', error);
+    });
 });
 
 // Helper function to get ImgBB API Key with validation
-function getImgBBApiKey() {
-    if (IMGBB_API_KEY && IMGBB_API_KEY.trim() !== '') {
+async function getImgBBApiKey() {
+    // If already initialized, return the key
+    if (remoteConfigInitialized && IMGBB_API_KEY) {
         return IMGBB_API_KEY;
     }
     
-    console.error('ImgBB API Key is not available');
-    return null;
+    // If not initialized, wait for initialization
+    try {
+        await fetchRemoteConfig();
+        return IMGBB_API_KEY;
+    } catch (error) {
+        console.error('Failed to get ImgBB API Key:', error);
+        throw new Error('QR code generation unavailable: API key not configured');
+    }
 }
 
 // CRITICAL: Configure auth persistence FIRST
