@@ -60,69 +60,71 @@ class AquaFlowApp {
         }
     }
 
-    async checkAuthentication() {
-        const user = authManager.getCurrentUser();
-        this.userData = authManager.getUserData(); 
-        
-        console.log('Auth check - User:', user ? 'present' : 'absent');
-        
-        if (!user) {
-            console.log('No user found, redirecting to auth.html');
-            window.location.replace('auth.html');
-            return false;
-        }
-        
-        this.authUserId = user.uid;
+   async checkAuthentication() {
+    console.log('Starting authentication check...');
+    
+    const user = authManager.getCurrentUser();
+    this.userData = authManager.getUserData(); 
+    
+    console.log('Auth check - User:', user ? 'present' : 'absent', 'UserData:', this.userData ? 'loaded' : 'missing');
+    
+    if (!user) {
+        console.log('No user found, redirecting to auth.html');
+        window.location.replace('auth.html');
+        return false;
+    }
+    
+    this.authUserId = user.uid;
 
-        // Load user data if missing
-        if (!this.userData) {
-            console.log('User data missing, attempting to load directly...');
+    // CRITICAL: Ensure user data is loaded with retry logic
+    if (!this.userData || !this.userData.role) {
+        console.log('User data missing, loading directly...');
+        let attempts = 0;
+        const maxAttempts = 3;
+        
+        while (attempts < maxAttempts && (!this.userData || !this.userData.role)) {
             await authManager.loadUserData(user);
             this.userData = authManager.getUserData();
-        }
-
-        if (!this.userData) {
-             console.error('CRITICAL: User data unavailable.');
-             // Do not default to owner if data is missing for security
-             return false;
-        }
-        
-        // ROLE MANAGEMENT & STRICT REDIRECT
-        this.userRole = this.userData.role || 'owner';
-        
-        // FIX: Strict separation. If Staff is on app.html, redirect to staff.html
-        if (this.userRole === 'staff') {
-            console.log('Staff user detected in Owner App. Redirecting to Staff Dashboard...');
-            window.location.replace('staff.html');
-            return false;
-        }
-
-        // Owner Logic
-        this.userId = user.uid;
-        
-        // Check if email is verified
-        if (user && !user.emailVerified) {
-            const banner = document.getElementById('verificationBanner');
-            if (banner) banner.style.display = 'block';
-        }
-        
-        return true;
-    }
-
-    setupEventListeners() {
-        // Customer search
-        const searchInput = document.getElementById('customerSearch');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => this.filterCustomers(e.target.value));
-        }
-
-        // Close modals on backdrop click
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) {
-                this.closeModal(e.target.id);
+            attempts++;
+            
+            if (!this.userData || !this.userData.role) {
+                console.log(`Retry ${attempts}/${maxAttempts} for user data`);
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
-        });
+        }
     }
+
+    if (!this.userData || !this.userData.role) {
+        console.error('CRITICAL: User data unavailable after retries.');
+        showError('Failed to load user profile. Please logout and login again.');
+        return false;
+    }
+    
+    // ROLE MANAGEMENT & STRICT REDIRECT
+    this.userRole = this.userData.role || 'owner';
+    
+    console.log('User role determined:', this.userRole);
+    
+    // FIX: Strict separation. If Staff is on app.html, redirect to staff.html
+    if (this.userRole === 'staff') {
+        console.log('Staff user detected in Owner App. Redirecting to Staff Dashboard...');
+        window.location.replace('staff.html');
+        return false;
+    }
+
+    // Owner Logic
+    this.userId = user.uid;
+    
+    console.log('Authentication check passed for owner');
+    
+    // Check if email is verified
+    if (user && !user.emailVerified) {
+        const banner = document.getElementById('verificationBanner');
+        if (banner) banner.style.display = 'block';
+    }
+    
+    return true;
+}
 
     async loadInitialData() {
         await Promise.all([
