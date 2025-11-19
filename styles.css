@@ -80,6 +80,12 @@ body {
     overflow: hidden;
 }
 
+.btn-sm {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 14px;
+    border-radius: var(--radius-sm);
+}
+
 .btn:active {
     transform: translateY(1px);
 }
@@ -111,8 +117,8 @@ body {
 
 .btn-outline {
     background: transparent;
-    border: 2px solid var(--primary);
-    color: var(--primary);
+    border: 1px solid var(--gray-400);
+    color: var(--gray-700);
 }
 
 .btn-block {
@@ -155,14 +161,107 @@ body {
     padding: var(--space-sm);
 }
 
-.btn-eye {
-    position: absolute;
-    right: var(--space-md);
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
+/* NEW TABLE STYLES */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: var(--white);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--space-md);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px; /* Force scroll on small screens */
+}
+
+.data-table th, .data-table td {
+    padding: var(--space-md);
+    text-align: left;
+    border-bottom: 1px solid var(--gray-200);
+    vertical-align: middle;
+}
+
+.data-table th {
+    background: var(--gray-100);
+    font-weight: 600;
+    color: var(--gray-700);
+    white-space: nowrap;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.data-table td {
+    color: var(--gray-800);
+    font-size: 0.95rem;
+}
+
+.data-table tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table tr:hover {
+    background-color: var(--gray-50);
+}
+
+.fw-bold {
+    font-weight: 700;
+}
+
+.text-muted {
     color: var(--gray-500);
-    padding: var(--space-sm);
+}
+
+.text-sm {
+    font-size: 0.85rem;
+}
+
+.text-xs {
+    font-size: 0.75rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    font-size: 75%;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 10rem;
+    background-color: var(--gray-200);
+    color: var(--gray-700);
+}
+
+.customer-type {
+    background: var(--primary-light);
+    color: var(--white);
+}
+
+.action-buttons-row {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+/* Pagination Controls */
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md);
+    background: var(--white);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.page-info {
+    font-size: 0.9rem;
+    color: var(--gray-600);
+    font-weight: 600;
 }
 
 /* Form Elements */
@@ -205,23 +304,6 @@ label {
 textarea.form-input {
     resize: vertical;
     min-height: 80px;
-}
-
-.input-group {
-    position: relative;
-    margin-bottom: var(--space-lg);
-}
-
-.input-group i {
-    position: absolute;
-    left: var(--space-lg);
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--gray-500);
-}
-
-.input-group input {
-    padding-left: var(--space-2xl);
 }
 
 /* Utility Classes */
@@ -402,7 +484,6 @@ textarea.form-input {
     display: block;
 }
 
-/* Auth Page Input Fields - FIXED PASSWORD EYE BUTTON */
 .auth-form .input-group {
     position: relative;
     margin-bottom: var(--space-lg);
@@ -435,11 +516,6 @@ textarea.form-input {
     box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
 }
 
-.auth-form .input-group input:focus + i {
-    color: var(--primary);
-}
-
-/* FIXED: Password eye button positioning */
 .auth-form .input-group .btn-eye {
     position: absolute;
     right: var(--space-md);
@@ -451,110 +527,16 @@ textarea.form-input {
     cursor: pointer;
     padding: var(--space-sm);
     border-radius: var(--radius-sm);
-    z-index: 3; /* Increased z-index to ensure it's above input */
+    z-index: 3;
     width: auto;
     height: auto;
-}
-
-.auth-form .input-group .btn-eye:hover {
-    background: var(--gray-200);
-    color: var(--gray-700);
-}
-
-/* Form Validation Styles */
-.auth-form .input-group input:invalid:not(:focus):not(:placeholder-shown) {
-    border-color: var(--danger);
-}
-
-.auth-form .input-group input:valid:not(:focus):not(:placeholder-shown) {
-    border-color: var(--success);
-}
-
-/* Loading state for forms */
-.auth-form.loading {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.auth-form.loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 30px;
-    height: 30px;
-    border: 3px solid var(--gray-300);
-    border-top: 3px solid var(--primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-/* Enhanced Input Styles for Better Mobile Experience */
-.auth-form input {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-}
-
-.auth-form input[type="number"] {
-    -moz-appearance: textfield;
-}
-
-.auth-form input[type="number"]::-webkit-outer-spin-button,
-.auth-form input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
-/* Placeholder styling */
-.auth-form input::placeholder {
-    color: var(--gray-500);
-    opacity: 0.7;
-}
-
-.auth-form input:focus::placeholder {
-    opacity: 0.5;
-}
-
-/* Error message styling */
-.input-error {
-    color: var(--danger);
-    font-size: 0.8rem;
-    margin-top: var(--space-xs);
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-}
-
-.input-error i {
-    font-size: 0.7rem;
-}
-
-/* Success message styling */
-.input-success {
-    color: var(--success);
-    font-size: 0.8rem;
-    margin-top: var(--space-xs);
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-}
-
-.input-success i {
-    font-size: 0.7rem;
 }
 
 /* App Page */
 .app-page {
     background: var(--light);
     min-height: 100vh;
-    padding-bottom: 80px; /* Space for bottom nav */
+    padding-bottom: 80px;
 }
 
 .app-header {
@@ -587,12 +569,6 @@ textarea.form-input {
 .status-online i {
     font-size: 0.6rem;
     margin-right: var(--space-xs);
-}
-
-.status-offline {
-    font-size: 0.8rem;
-    color: var(--danger);
-    font-weight: 600;
 }
 
 .header-right {
@@ -638,6 +614,7 @@ textarea.form-input {
 .view-header h2 {
     flex: 1;
     color: var(--gray-800);
+    font-size: 1.2rem;
 }
 
 /* Stats Grid */
@@ -822,64 +799,6 @@ textarea.form-input {
     border-radius: var(--radius-lg);
     font-size: 16px;
     background: var(--white);
-}
-
-/* Customers List */
-.customers-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-}
-
-.customer-card {
-    background: var(--white);
-    padding: var(--space-lg);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    border-left: 4px solid var(--primary);
-}
-
-.customer-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: start;
-    margin-bottom: var(--space-md);
-}
-
-.customer-name {
-    font-weight: 700;
-    color: var(--gray-800);
-    font-size: 1.1rem;
-}
-
-.customer-type {
-    background: var(--primary);
-    color: var(--white);
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
-}
-
-.customer-details {
-    color: var(--gray-600);
-    font-size: 0.9rem;
-    margin-bottom: var(--space-md);
-}
-
-.customer-details div {
-    margin-bottom: var(--space-xs);
-}
-
-.customer-actions {
-    display: flex;
-    gap: var(--space-sm);
-}
-
-.customer-actions .btn {
-    flex: 1;
-    padding: var(--space-sm);
-    font-size: 0.8rem;
 }
 
 /* Empty State */
@@ -1303,6 +1222,7 @@ textarea.form-input {
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -1568,26 +1488,4 @@ textarea.form-input {
 
 .notification-item.loading {
     animation: pulse 1.5s ease-in-out infinite;
-}
-
-/* Empty state for notifications */
-.empty-state {
-    text-align: center;
-    padding: var(--space-2xl);
-    color: var(--gray-500);
-}
-
-.empty-state i {
-    font-size: 3rem;
-    margin-bottom: var(--space-md);
-    opacity: 0.5;
-}
-
-.empty-state h3 {
-    margin-bottom: var(--space-sm);
-    color: var(--gray-600);
-}
-
-.empty-state p {
-    margin-bottom: var(--space-lg);
 }
