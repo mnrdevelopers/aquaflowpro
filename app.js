@@ -24,7 +24,9 @@ class AquaFlowApp {
         this.deliveryPage = 1; // Pagination for deliveries view
 
         this.init();
-    }
+
+        this.setupPremiumAnimations();
+  }
 
     async init() {
         console.log('App initialization started');
@@ -2135,3 +2137,41 @@ document.addEventListener('DOMContentLoaded', function() {
   app = new AquaFlowApp();
   initializePremiumInteractions(); // Add this line
 });
+
+
+ setupPremiumAnimations() {
+    // Add intersection observer for scroll animations
+    this.setupScrollAnimations();
+    
+    // Initialize ripple effects
+    this.setupRippleEffects();
+  }
+
+  setupRippleEffects() {
+    document.addEventListener('click', function(e) {
+      if (e.target.closest('.scanner-btn')) {
+        addRippleEffect(e);
+      }
+    });
+  }
+
+  setupScrollAnimations() {
+    // Add subtle animations to elements when they come into view
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    });
+
+    // Observe elements that should animate in
+    document.querySelectorAll('.stat-card, .feature, .quick-action-btn').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(20px)';
+      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(el);
+    });
+  }
+}
