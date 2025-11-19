@@ -30,6 +30,11 @@
                 </div>
             </div>
             <div class="header-right">
+                <!-- New Delivery Management Button -->
+                <button class="btn btn-icon" onclick="showView('deliveries')" title="Manage Deliveries">
+                    <i class="fas fa-truck"></i>
+                </button>
+                
                 <button class="btn btn-icon" onclick="showNotifications()">
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge hidden" id="notificationCount">0</span>
@@ -109,11 +114,34 @@
             <div class="recent-activity">
                 <div class="section-header">
                     <h3>Recent Deliveries</h3>
-                    <button class="btn btn-text" onclick="showAllDeliveries()">View All</button>
+                    <button class="btn btn-text" onclick="showView('deliveries')">View All</button>
                 </div>
                 <div id="recentDeliveriesList" class="activity-list">
                     <!-- Recent deliveries will be loaded here -->
                 </div>
+            </div>
+        </section>
+
+        <!-- Deliveries Management View -->
+        <section id="deliveriesView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Delivery Management</h2>
+            </div>
+
+            <!-- Search -->
+            <div class="search-section">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="deliverySearch" placeholder="Search by customer name..." oninput="app.filterDeliveries(this.value)">
+                </div>
+            </div>
+
+            <!-- Deliveries Table -->
+            <div id="deliveriesListContainer">
+                <!-- Deliveries table will be loaded here via JS -->
             </div>
         </section>
 
@@ -314,6 +342,47 @@
                     </button>
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Update Customer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Delivery Modal -->
+    <div id="editDeliveryModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Delivery</h3>
+                <button class="btn btn-close" onclick="closeModal('editDeliveryModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editDeliveryForm" onsubmit="app.updateDelivery(event)">
+                <input type="hidden" id="editDeliveryId">
+                <input type="hidden" id="editDeliveryCustomerId">
+                
+                <div class="form-group">
+                    <label>Customer Name</label>
+                    <input type="text" id="editDeliveryCustomerName" class="form-input" readonly style="background-color: var(--gray-100);">
+                </div>
+                
+                <div class="form-group">
+                    <label for="editDeliveryDate">Delivery Date & Time</label>
+                    <input type="text" id="editDeliveryDate" class="form-input" readonly style="background-color: var(--gray-100);">
+                </div>
+
+                <div class="form-group">
+                    <label for="editDeliveryQuantity">Number of Cans</label>
+                    <input type="number" id="editDeliveryQuantity" class="form-input" min="1" required>
+                    <p class="text-sm text-muted" style="margin-top: 5px;">Update to correct a mistake.</p>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-danger" onclick="app.confirmDeleteDelivery()">
+                        <i class="fas fa-trash"></i> Delete Entry
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Delivery
                     </button>
                 </div>
             </form>
