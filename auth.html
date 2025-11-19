@@ -59,30 +59,53 @@
 
                 <button type="submit" class="btn btn-primary btn-block">
                     <i class="fas fa-sign-in-alt"></i>
-                    Sign In to Your Business
+                    Sign In
                 </button>
             </form>
 
             <!-- Signup Form -->
             <form id="signupForm" class="auth-form">
-                <div class="input-group">
-                    <i class="fas fa-store"></i>
-                    <input type="text" id="businessName" placeholder="Your business name" required>
+                <!-- Role Selection -->
+                <div style="margin-bottom: 1rem; background: var(--gray-100); padding: 10px; border-radius: 8px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="isStaffCheckbox" onchange="toggleSignupMode()" style="width: auto; margin-right: 10px;">
+                        <span style="font-weight: 600; color: var(--gray-800);">I am a Delivery Driver/Staff</span>
+                    </label>
                 </div>
-                
+
+                <!-- Common Fields -->
                 <div class="input-group">
                     <i class="fas fa-user"></i>
                     <input type="text" id="ownerName" placeholder="Your full name" required>
                 </div>
-                
-                <div class="input-group">
-                    <i class="fas fa-phone"></i>
-                    <input type="tel" id="businessPhone" placeholder="Business phone number" required>
+
+                <!-- Owner Specific Fields -->
+                <div id="ownerFields">
+                    <div class="input-group">
+                        <i class="fas fa-store"></i>
+                        <input type="text" id="businessName" placeholder="Your business name">
+                    </div>
+                    
+                    <div class="input-group">
+                        <i class="fas fa-phone"></i>
+                        <input type="tel" id="businessPhone" placeholder="Business phone number">
+                    </div>
+
+                    <div class="input-group">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <input type="text" id="businessAddress" placeholder="Business address">
+                    </div>
                 </div>
 
-                <div class="input-group">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <input type="text" id="businessAddress" placeholder="Business address" required>
+                <!-- Staff Specific Fields -->
+                <div id="staffFields" class="hidden">
+                    <div class="input-group" style="border: 2px solid var(--primary); border-radius: 8px;">
+                        <i class="fas fa-id-card" style="color: var(--primary);"></i>
+                        <input type="text" id="businessOwnerId" placeholder="Paste Business Owner ID here">
+                    </div>
+                    <p class="text-sm text-muted" style="margin-bottom: 1rem; padding-left: 5px;">
+                        Ask the business owner for their ID found in Settings.
+                    </p>
                 </div>
                 
                 <div class="input-group">
@@ -98,12 +121,12 @@
                     </button>
                 </div>
 
-                <div class="input-group">
+                <div id="priceField" class="input-group">
                     <i class="fas fa-rupee-sign"></i>
-                    <input type="number" id="defaultPrice" placeholder="Default price per 20L can" value="20" min="1" required>
+                    <input type="number" id="defaultPrice" placeholder="Default price per 20L can" value="20" min="1">
                 </div>
 
-                <button type="submit" class="btn btn-success btn-block">
+                <button type="submit" class="btn btn-success btn-block" id="signupBtn">
                     <i class="fas fa-user-plus"></i>
                     Create Business Account
                 </button>
@@ -172,6 +195,50 @@
             } else {
                 input.type = 'password';
                 icon.className = 'fas fa-eye';
+            }
+        }
+
+        function toggleSignupMode() {
+            const isStaff = document.getElementById('isStaffCheckbox').checked;
+            const ownerFields = document.getElementById('ownerFields');
+            const staffFields = document.getElementById('staffFields');
+            const priceField = document.getElementById('priceField');
+            const signupBtn = document.getElementById('signupBtn');
+            const businessName = document.getElementById('businessName');
+            const businessPhone = document.getElementById('businessPhone');
+            const businessAddress = document.getElementById('businessAddress');
+            const businessOwnerId = document.getElementById('businessOwnerId');
+
+            if (isStaff) {
+                ownerFields.classList.add('hidden');
+                priceField.classList.add('hidden');
+                staffFields.classList.remove('hidden');
+                
+                // Remove required from owner fields
+                businessName.removeAttribute('required');
+                businessPhone.removeAttribute('required');
+                businessAddress.removeAttribute('required');
+                
+                // Add required to staff fields
+                businessOwnerId.setAttribute('required', 'true');
+                
+                signupBtn.innerHTML = '<i class="fas fa-id-badge"></i> Create Staff Account';
+                signupBtn.className = 'btn btn-primary btn-block'; // Blue for staff
+            } else {
+                ownerFields.classList.remove('hidden');
+                priceField.classList.remove('hidden');
+                staffFields.classList.add('hidden');
+                
+                // Add required back
+                businessName.setAttribute('required', 'true');
+                businessPhone.setAttribute('required', 'true');
+                businessAddress.setAttribute('required', 'true');
+                
+                // Remove required from staff
+                businessOwnerId.removeAttribute('required');
+                
+                signupBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Business Account';
+                signupBtn.className = 'btn btn-success btn-block'; // Green for owner
             }
         }
     </script>
