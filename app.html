@@ -534,18 +534,26 @@
             <div class="settings-content">
                 <form id="settingsForm" onsubmit="saveSettings(event)">
                     <!-- Owner Only Settings -->
-                    <div class="setting-section" data-role="owner">
-                        <h4>Business Information</h4>
-                         <div class="setting-item">
-                            <label>Business ID (Share with Staff)</label>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="text" id="settingsBusinessId" class="form-input" readonly style="background: var(--gray-100); font-family: monospace;">
-                                <button type="button" class="btn btn-secondary" onclick="copyBusinessId()">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                            </div>
-                            <p class="text-sm text-muted">Staff need this ID to join your business.</p>
-                        </div>
+                   <div class="setting-section" data-role="owner">
+    <h4>Staff Management</h4>
+    <div class="setting-item">
+        <label>Your Business ID</label>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="settingsBusinessId" class="form-input" readonly style="background: var(--gray-100); font-family: monospace;">
+            <button type="button" class="btn btn-secondary" onclick="copyBusinessId()">
+                <i class="fas fa-copy"></i>
+            </button>
+        </div>
+        <p class="text-sm text-muted">Share this ID with staff so they can join your business.</p>
+    </div>
+    
+    <div class="staff-members-section">
+        <h5>Current Staff Members</h5>
+        <div id="staffMembersList" class="staff-members-list">
+            <!-- Staff members will be loaded here -->
+        </div>
+    </div>
+</div>
                         <div class="setting-item">
                             <label>Business Name</label>
                             <input type="text" id="settingsBusinessName" class="form-input">
