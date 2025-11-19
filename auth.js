@@ -13,58 +13,74 @@ class AuthManager {
     }
 
     setupAuthStateListener() {
-        auth.onAuthStateChanged(async (user) => {
-            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
-            this.currentUser = user;
-            this.authStateReady = true;
+    auth.onAuthStateChanged(async (user) => {
+        console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+        this.currentUser = user;
+        this.authStateReady = true;
+        
+        if (user) {
+            // Add a small delay to ensure everything is loaded
+            await new Promise(resolve => setTimeout(resolve, 500));
             
-            if (user) {
-                // Check if we are currently on the auth page (login/signup)
-                // We use a loose check to cover root path, index.html, auth.html etc.
-                const path = window.location.pathname;
-                const isAuthPage = path.includes('auth.html') || path === '/' || path.endsWith('/');
+            // Check if we are currently on the auth page
+            const path = window.location.pathname;
+            const isAuthPage = path.includes('auth.html') || path === '/' || path.endsWith('/');
 
-                if (isAuthPage) {
-                    // 1. Try to load user data (fetch or cache)
-                    if (!this.userData) {
-                        await this.loadUserData(user);
-                    }
-                    
-                    // 2. Redirect if we have data
-                    if (this.userData) {
-                        console.log('User data ready, redirecting...');
-                        this.redirectBasedOnRole();
-                    } else {
-                        // If we still don't have data after trying to load, it might be a network error on first login
-                        // We keep them on the page but stop any loading indicators
-                        this.setFormLoading('loginForm', false);
-                        this.setFormLoading('signupForm', false);
-                    }
+            if (isAuthPage) {
+                // 1. Try to load user data
+                if (!this.userData) {
+                    await this.loadUserData(user);
                 }
-            } else {
-                this.userData = null;
-                localStorage.removeItem('userData');
                 
-                // Redirect to auth if on protected pages
-                if (window.location.pathname.includes('app.html') || 
-                    window.location.pathname.includes('staff.html')) {
-                    window.location.href = 'auth.html';
+                // 2. Add additional verification before redirect
+                if (this.userData && this.userData.role) {
+                    console.log('User data ready, redirecting...', this.userData.role);
+                    // Use setTimeout to ensure the redirect happens in the next event loop
+                    setTimeout(() => {
+                        this.redirectBasedOnRole();
+                    }, 100);
+                } else {
+                    console.log('User data not ready, waiting...');
+                    // Try one more time after a delay
+                    setTimeout(async () => {
+                        if (!this.userData) {
+                            await this.loadUserData(user);
+                        }
+                        if (this.userData && this.userData.role) {
+                            this.redirectBasedOnRole();
+                        }
+                    }, 1000);
                 }
             }
-        });
-    }
-
-    redirectBasedOnRole() {
-        if (!this.userData) return;
-        
-        // Use href instead of replace on mobile if replace is causing issues
-        if (this.userData.role === 'staff') {
-            window.location.href = 'staff.html';
         } else {
-            window.location.href = 'app.html';
+            this.userData = null;
+            localStorage.removeItem('userData');
+            
+            // Redirect to auth if on protected pages
+            if (window.location.pathname.includes('app.html') || 
+                window.location.pathname.includes('staff.html')) {
+                window.location.href = 'auth.html';
+            }
         }
-    }
+    });
+}
 
+   redirectBasedOnRole() {
+    if (!this.userData || !this.userData.role) {
+        console.error('Cannot redirect: User data or role missing');
+        return;
+    }
+    
+    console.log('Redirecting based on role:', this.userData.role);
+    
+    // Use location.replace instead of href to prevent history issues
+    if (this.userData.role === 'staff') {
+        window.location.replace('staff.html');
+    } else {
+        window.location.replace('app.html');
+    }
+}
+    
    setupFormHandlers() {
     // Login form
     const loginForm = document.getElementById('loginForm');
@@ -160,7 +176,7 @@ clearInputError(input) {
     input.style.borderColor = '';
 }
     
-   async handleLogin(e) {
+ async handleLogin(e) {
     e.preventDefault();
     
     const email = document.getElementById('loginEmail').value;
@@ -175,24 +191,39 @@ clearInputError(input) {
         // Start loading state
         this.setFormLoading('loginForm', true);
         
-        // Perform Login ONLY
+        // Clear any existing user data to ensure fresh state
+        this.userData = null;
+        localStorage.removeItem('userData');
+        
+        // Perform Login
         await auth.signInWithEmailAndPassword(email, password);
         
         showSuccess('Welcome back! Redirecting...');
         
-        // CRITICAL CHANGE:
-        // We DO NOT load data or redirect here anymore.
-        // We let the onAuthStateChanged listener handle it.
-        // This prevents the "conflict" where two things try to redirect at once.
+        // Force a small delay to ensure auth state is fully processed
+        setTimeout(() => {
+            // If still on auth page after 2 seconds, force redirect
+            if (window.location.pathname.includes('auth.html') || 
+                window.location.pathname === '/' || 
+                window.location.pathname.endsWith('/')) {
+                
+                console.log('Forcing redirect after timeout');
+                if (this.userData && this.userData.role) {
+                    this.redirectBasedOnRole();
+                } else {
+                    // Last resort: redirect to app and let it handle auth
+                    window.location.replace('app.html');
+                }
+            }
+        }, 2000);
         
     } catch (error) {
         console.error('Login error:', error);
         this.handleAuthError(error);
-        this.setFormLoading('loginForm', false); // Stop loading on error
+        this.setFormLoading('loginForm', false);
     }
-    // Note: We do NOT stop loading on success, so the button stays spinning until redirect
 }
-
+    
     // Handle Password Reset
     async handlePasswordReset(e) {
         e.preventDefault();
