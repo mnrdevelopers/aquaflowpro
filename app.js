@@ -90,10 +90,8 @@ class AquaFlowApp {
         }
 
         // Form submissions
-        const customerForm = document.getElementById('addCustomerForm');
-        if (customerForm) {
-            customerForm.addEventListener('submit', (e) => this.addCustomer(e));
-        }
+        // FIXED: Removed duplicate event listener for addCustomerForm.
+        // The form already has onsubmit="addCustomer(event)" in HTML, so adding a listener here caused double submission.
 
         // Close modals on backdrop click
         document.addEventListener('click', (e) => {
@@ -415,6 +413,12 @@ class AquaFlowApp {
 
         // Prevent double submission
         const submitBtn = e.target.querySelector('button[type="submit"]');
+        
+        // FIXED: Added extra guard clause to prevent any double clicks
+        if (submitBtn.disabled || submitBtn.classList.contains('disabled')) {
+            return; 
+        }
+
         const originalText = submitBtn.innerHTML;
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
