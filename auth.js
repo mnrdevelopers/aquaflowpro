@@ -19,14 +19,27 @@ class AuthManager {
             this.authStateReady = true;
             
             if (user) {
-                // Only load data if we don't have it (or if it's a page reload)
-                if (!this.userData) {
-                    await this.loadUserData(user);
-                }
-                
-                // Auto-redirect if user is already logged in and lands on auth page
-                if (window.location.pathname.includes('auth.html') && this.userData) {
-                    this.redirectBasedOnRole();
+                // Check if we are currently on the auth page (login/signup)
+                // We use a loose check to cover root path, index.html, auth.html etc.
+                const path = window.location.pathname;
+                const isAuthPage = path.includes('auth.html') || path === '/' || path.endsWith('/');
+
+                if (isAuthPage) {
+                    // 1. Try to load user data (fetch or cache)
+                    if (!this.userData) {
+                        await this.loadUserData(user);
+                    }
+                    
+                    // 2. Redirect if we have data
+                    if (this.userData) {
+                        console.log('User data ready, redirecting...');
+                        this.redirectBasedOnRole();
+                    } else {
+                        // If we still don't have data after trying to load, it might be a network error on first login
+                        // We keep them on the page but stop any loading indicators
+                        this.setFormLoading('loginForm', false);
+                        this.setFormLoading('signupForm', false);
+                    }
                 }
             } else {
                 this.userData = null;
@@ -44,11 +57,11 @@ class AuthManager {
     redirectBasedOnRole() {
         if (!this.userData) return;
         
-        // Use replace() to prevent user from going back to login page
+        // Use href instead of replace on mobile if replace is causing issues
         if (this.userData.role === 'staff') {
-            window.location.replace('staff.html');
+            window.location.href = 'staff.html';
         } else {
-            window.location.replace('app.html');
+            window.location.href = 'app.html';
         }
     }
 
@@ -159,28 +172,25 @@ clearInputError(input) {
     }
     
     try {
+        // Start loading state
         this.setFormLoading('loginForm', true);
         
-        // 1. Perform Login
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        showSuccess('Welcome back!');
-
-        // 2. Explicitly Load Data (Don't wait for the listener)
-        const success = await this.loadUserData(userCredential.user);
+        // Perform Login ONLY
+        await auth.signInWithEmailAndPassword(email, password);
         
-        // 3. Explicitly Redirect
-        if (success) {
-            this.redirectBasedOnRole();
-        } else {
-            showError('Login successful, but failed to load user profile.');
-        }
-
+        showSuccess('Welcome back! Redirecting...');
+        
+        // CRITICAL CHANGE:
+        // We DO NOT load data or redirect here anymore.
+        // We let the onAuthStateChanged listener handle it.
+        // This prevents the "conflict" where two things try to redirect at once.
+        
     } catch (error) {
         console.error('Login error:', error);
         this.handleAuthError(error);
-    } finally {
-        this.setFormLoading('loginForm', false);
+        this.setFormLoading('loginForm', false); // Stop loading on error
     }
+    // Note: We do NOT stop loading on success, so the button stays spinning until redirect
 }
 
     // Handle Password Reset
@@ -275,7 +285,7 @@ clearInputError(input) {
             try {
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
                 
-                // Update local state immediately
+                // Update local state immediately so listener picks it up
                 this.userData = userData;
                 this.userData.uid = user.uid;
                 localStorage.setItem('userData', JSON.stringify(this.userData));
@@ -288,23 +298,20 @@ clearInputError(input) {
 
             showSuccess(isStaff ? 'Staff account created!' : 'Business account created!');
             
-            // Explicit Redirect
-            setTimeout(() => {
-                this.redirectBasedOnRole();
-            }, 1500);
+            // Listener will handle redirect
             
         } catch (error) {
             console.error('Signup error:', error);
             this.handleAuthError(error);
-        } finally {
             this.setFormLoading('signupForm', false);
         }
     }
 
     setFormLoading(formId, isLoading) {
         const form = document.getElementById(formId);
-        const submitBtn = form.querySelector('button[type="submit"]');
         if(!form) return;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if(!submitBtn) return;
 
         if (isLoading) {
             form.classList.add('loading');
@@ -336,6 +343,13 @@ clearInputError(input) {
             return false;
         } catch (error) {
             console.error('Error loading user data:', error);
+            // Fallback: Check local storage if network fails
+            const cached = localStorage.getItem('userData');
+            if (cached) {
+                console.log('Using cached user data due to network error');
+                this.userData = JSON.parse(cached);
+                return true;
+            }
             return false;
         }
     }
