@@ -22,43 +22,40 @@ class AuthManager {
                 // User is signed in
                 const userDataLoaded = await this.loadUserData(user);
                 
-                // Redirect if on auth page
+                // Redirect if on auth page AND user data is loaded
                 if (window.location.pathname.includes('auth.html') && userDataLoaded) {
-                    this.redirectUser();
+                    console.log('Redirecting to app.html - User authenticated with data');
+                    window.location.href = 'app.html';
                 }
             } else {
                 // User is signed out
                 this.userData = null;
                 localStorage.removeItem('userData');
                 
-                // Redirect to auth if on a protected page
-                if (!window.location.pathname.includes('auth.html') && !window.location.pathname.includes('index.html')) {
+                if (window.location.pathname.includes('app.html')) {
+                    console.log('Redirecting to auth.html - User signed out');
                     window.location.href = 'auth.html';
                 }
             }
         });
     }
 
-    redirectUser() {
-        const role = this.userData?.role || 'owner';
-        const targetPage = role === 'staff' ? 'staff.html' : 'app.html';
-        console.log(`Redirecting ${role} to ${targetPage}`);
-        window.location.href = targetPage;
-    }
-
    setupFormHandlers() {
+    // Login form
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
         loginForm.addEventListener('submit', (e) => this.handleLogin(e));
         this.setupInputValidation(loginForm);
     }
 
+    // Signup form
     const signupForm = document.getElementById('signupForm');
     if (signupForm) {
         signupForm.addEventListener('submit', (e) => this.handleSignup(e));
         this.setupInputValidation(signupForm);
     }
 
+    // Reset Password form
     const resetForm = document.getElementById('resetForm');
     if (resetForm) {
         resetForm.addEventListener('submit', (e) => this.handlePasswordReset(e));
@@ -75,7 +72,11 @@ class AuthManager {
 
 validateInput(input) {
     this.clearInputError(input);
-    if (input.offsetParent === null) return true; // Skip hidden inputs
+    
+    // Skip validation for hidden inputs (based on role selection)
+    if (input.offsetParent === null) {
+        return true;
+    }
     
     if (!input.value.trim()) {
         this.showInputError(input, 'This field is required');
@@ -84,6 +85,11 @@ validateInput(input) {
 
     if (input.type === 'email' && !this.isValidEmail(input.value)) {
         this.showInputError(input, 'Please enter a valid email address');
+        return false;
+    }
+
+    if (input.type === 'tel' && !this.isValidPhone(input.value)) {
+        this.showInputError(input, 'Please enter a valid phone number');
         return false;
     }
 
@@ -101,11 +107,18 @@ isValidEmail(email) {
     return emailRegex.test(email);
 }
 
+isValidPhone(phone) {
+    const phoneRegex = /^[0-9]{10}$/;
+    return phoneRegex.test(phone.replace(/\D/g, ''));
+}
+
 showInputError(input, message) {
     this.clearInputError(input);
+    
     const errorDiv = document.createElement('div');
     errorDiv.className = 'input-error';
     errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+    
     input.parentNode.appendChild(errorDiv);
     input.style.borderColor = 'var(--danger)';
 }
@@ -116,34 +129,45 @@ showInputSuccess(input) {
 
 clearInputError(input) {
     const errorDiv = input.parentNode.querySelector('.input-error');
-    if (errorDiv) errorDiv.remove();
+    if (errorDiv) {
+        errorDiv.remove();
+    }
     input.style.borderColor = '';
 }
     
    async handleLogin(e) {
     e.preventDefault();
+    
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     
     if (!this.validateInput(document.getElementById('loginEmail')) || 
-        !this.validateInput(document.getElementById('loginPassword'))) return;
+        !this.validateInput(document.getElementById('loginPassword'))) {
+        return;
+    }
     
     try {
         this.setFormLoading('loginForm', true);
         await auth.signInWithEmailAndPassword(email, password);
         showSuccess('Welcome back!');
-        // Redirect handled by auth listener
     } catch (error) {
         console.error('Login error:', error);
         this.handleAuthError(error);
+    } finally {
         this.setFormLoading('loginForm', false);
     }
 }
 
+    // Handle Password Reset
     async handlePasswordReset(e) {
         e.preventDefault();
-        const email = document.getElementById('resetEmail').value;
-        if (!this.isValidEmail(email)) return this.showInputError(document.getElementById('resetEmail'), 'Invalid email');
+        const emailInput = document.getElementById('resetEmail');
+        const email = emailInput.value;
+
+        if (!this.isValidEmail(email)) {
+            this.showInputError(emailInput, 'Please enter a valid email');
+            return;
+        }
 
         const submitBtn = e.target.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;
@@ -152,9 +176,14 @@ clearInputError(input) {
 
         try {
             await auth.sendPasswordResetEmail(email);
-            showSuccess('Password reset link sent!');
-            setTimeout(() => { showTab('login'); }, 3000);
+            showSuccess('Password reset link sent to your email!');
+            // Switch back to login after short delay
+            setTimeout(() => {
+                showTab('login');
+                emailInput.value = '';
+            }, 3000);
         } catch (error) {
+            console.error('Reset error:', error);
             this.handleAuthError(error);
         } finally {
             submitBtn.disabled = false;
@@ -164,12 +193,14 @@ clearInputError(input) {
 
    async handleSignup(e) {
         e.preventDefault();
+        
         const isStaff = document.getElementById('isStaffCheckbox').checked;
         const email = document.getElementById('signupEmail').value;
         const password = document.getElementById('signupPassword').value;
         const ownerName = document.getElementById('ownerName').value;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
+        // Prepare Data object based on role
         let userData = {
             email,
             ownerName,
@@ -178,43 +209,76 @@ clearInputError(input) {
         };
 
         if (isStaff) {
+            // Staff Validation
             const businessOwnerId = document.getElementById('businessOwnerId').value.trim();
-            if (!businessOwnerId) return this.showInputError(document.getElementById('businessOwnerId'), 'Owner ID required');
+            if (!businessOwnerId) {
+                this.showInputError(document.getElementById('businessOwnerId'), 'Business Owner ID is required');
+                return;
+            }
             userData.role = 'staff';
             userData.ownerId = businessOwnerId;
+            // Note: Staff inherits business details from the ownerId when loaded in app.js
         } else {
+            // Business Owner Validation
+            const businessName = document.getElementById('businessName').value;
+            const businessPhone = document.getElementById('businessPhone').value;
+            const businessAddress = document.getElementById('businessAddress').value;
+            const defaultPrice = parseInt(document.getElementById('defaultPrice').value) || 20;
+
             userData.role = 'owner';
-            userData.businessName = document.getElementById('businessName').value;
-            userData.businessPhone = document.getElementById('businessPhone').value;
-            userData.businessAddress = document.getElementById('businessAddress').value;
-            userData.defaultPrice = parseInt(document.getElementById('defaultPrice').value) || 20;
+            userData.businessName = businessName;
+            userData.businessPhone = businessPhone;
+            userData.businessAddress = businessAddress;
+            userData.defaultPrice = defaultPrice;
+            userData.subscription = 'free';
         }
         
         try {
             this.setFormLoading('signupForm', true);
+            
+            // Removed the pre-signup DB check for ownerId here because 
+            // unauthenticated users don't have permission to read other users' data.
+
+            // Create user account
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
             
-            try { await user.sendEmailVerification(); } catch (err) { console.error(err); }
+            // Send Email Verification Link
+            try {
+                await user.sendEmailVerification();
+            } catch (emailError) {
+                console.error('Error sending verification email:', emailError);
+            }
 
-            await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
-            await this.loadUserData(user);
+            // Save User Data
+            try {
+                // Write own user document (allowed because auth.uid matches doc path)
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
+            } catch (firestoreError) {
+                console.error('Firestore write error:', firestoreError);
+                await user.delete(); // Rollback
+                throw new Error('Failed to create profile. Please try again.');
+            }
 
-            showSuccess('Account created successfully!');
-            setTimeout(() => this.redirectUser(), 1500);
+            showSuccess(isStaff ? 'Staff account created!' : 'Business account created!');
+            
+            setTimeout(() => {
+                window.location.href = 'app.html';
+            }, 2000);
             
         } catch (error) {
             console.error('Signup error:', error);
             this.handleAuthError(error);
+        } finally {
             this.setFormLoading('signupForm', false);
         }
     }
 
     setFormLoading(formId, isLoading) {
         const form = document.getElementById(formId);
-        if(!form) return;
         const submitBtn = form.querySelector('button[type="submit"]');
-        
+        if(!form) return;
+
         if (isLoading) {
             form.classList.add('loading');
             submitBtn.disabled = true;
@@ -222,8 +286,12 @@ clearInputError(input) {
         } else {
             form.classList.remove('loading');
             submitBtn.disabled = false;
-            if (formId === 'loginForm') submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
-            else if (formId === 'signupForm') submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
+            if (formId === 'loginForm') {
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+            } else if (formId === 'signupForm') {
+                 const isStaff = document.getElementById('isStaffCheckbox')?.checked;
+                 submitBtn.innerHTML = isStaff ? '<i class="fas fa-id-badge"></i> Create Staff Account' : '<i class="fas fa-user-plus"></i> Create Business Account';
+            }
         }
     }
     
@@ -231,6 +299,7 @@ clearInputError(input) {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const userDoc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
+            
             if (userDoc.exists) {
                 this.userData = userDoc.data();
                 this.userData.uid = user.uid;
@@ -244,15 +313,39 @@ clearInputError(input) {
         }
     }
 
+    updateUI() {
+        // This is now handled mainly in app.js
+    }
+
   handleAuthError(error) {
-        let message = 'An error occurred.';
+        let message = 'An error occurred. Please try again.';
+        
         switch (error.code) {
-            case 'auth/email-already-in-use': message = 'Email already registered.'; break;
-            case 'auth/invalid-email': message = 'Invalid email address.'; break;
-            case 'auth/weak-password': message = 'Password too weak.'; break;
-            case 'auth/user-not-found': message = 'Account not found.'; break;
-            case 'auth/wrong-password': message = 'Incorrect password.'; break;
+            case 'auth/email-already-in-use':
+                message = 'This email is already registered. Please sign in instead.';
+                break;
+            case 'auth/invalid-email':
+                message = 'Please enter a valid email address.';
+                break;
+            case 'auth/weak-password':
+                message = 'Password should be at least 6 characters long.';
+                break;
+            case 'auth/user-not-found':
+                message = 'No account found with this email. Please sign up first.';
+                break;
+            case 'auth/wrong-password':
+                message = 'Incorrect password. Please try again.';
+                break;
+            case 'auth/network-request-failed':
+                message = 'Network error. Please check your internet connection.';
+                break;
+            default:
+                if (error.message.includes('Firestore write error') || error.message.includes('verification failed')) {
+                    message = error.message;
+                }
+                break;
         }
+        
         showError(message);
     }
 
@@ -260,19 +353,38 @@ clearInputError(input) {
         try {
             await auth.signOut();
             localStorage.removeItem('userData');
-            window.location.href = 'auth.html';
+            showSuccess('Signed out successfully');
         } catch (error) {
+            console.error('Logout error:', error);
             showError('Error signing out');
         }
     }
 
-    getCurrentUser() { return this.currentUser; }
-    getUserData() { 
-        if (this.userData) return this.userData;
-        return JSON.parse(localStorage.getItem('userData') || 'null');
+    getCurrentUser() {
+        return this.currentUser;
     }
-    isAuthStateReady() { return this.authStateReady; }
+
+    getUserData() {
+        if (this.userData) return this.userData;
+        const storedData = localStorage.getItem('userData');
+        if (storedData) {
+            try {
+                this.userData = JSON.parse(storedData);
+                return this.userData;
+            } catch (e) {
+                localStorage.removeItem('userData');
+                return null;
+            }
+        }
+        return null;
+    }
+
+    isAuthStateReady() {
+        return this.authStateReady;
+    }
 }
 
 const authManager = new AuthManager();
-function logout() { authManager.logout(); }
+function logout() {
+    authManager.logout();
+}
