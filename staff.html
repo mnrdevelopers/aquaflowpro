@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaFlow Pro - Staff Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💧</text></svg>">
+
+    <!-- HTML5 QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" referrerpolicy="no-referrer"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
+</head>
+<body class="app-page">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="business-info">
+                    <h1 id="businessName">AquaFlow Pro</h1>
+                    <span class="badge bg-secondary" id="userRoleBadge">Staff</span>
+                    <span class="status-online" id="connectionStatus">
+                        <i class="fas fa-circle"></i> Online
+                    </span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-icon" onclick="showView('deliveries')" title="My Deliveries">
+                    <i class="fas fa-truck"></i>
+                </button>
+                <button class="btn btn-icon" onclick="showNotifications()">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge hidden" id="notificationCount">0</span>
+                </button>
+                <button class="btn btn-icon" onclick="showSettings()">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button class="btn btn-icon" onclick="logout()" title="Logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content - Simplified for Staff -->
+    <main class="main-content">
+        <!-- Dashboard View -->
+        <section id="dashboardView" class="view active">
+            <!-- Today's Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-number" id="todayMyDeliveries">0</div>
+                        <div class="stat-label">My Deliveries Today</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-truck-loading"></i>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-number" id="totalCustomers">0</div>
+                        <div class="stat-label">Total Customers</div>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions-section">
+                <h3>Quick Actions</h3>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="openScanner()">
+                        <i class="fas fa-qrcode"></i>
+                        Scan Delivery
+                    </button>
+                    <button class="quick-action-btn" onclick="showView('customers')">
+                        <i class="fas fa-users"></i>
+                        View Customers
+                    </button>
+                    <button class="quick-action-btn" onclick="showView('deliveries')">
+                        <i class="fas fa-list"></i>
+                        My Deliveries
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="recent-activity">
+                <div class="section-header">
+                    <h3>My Recent Deliveries</h3>
+                    <button class="btn btn-text" onclick="showView('deliveries')">View All</button>
+                </div>
+                <div id="recentDeliveriesList" class="activity-list">
+                    <!-- Recent deliveries will be loaded here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Deliveries Management View -->
+        <section id="deliveriesView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>My Deliveries</h2>
+            </div>
+
+            <!-- Deliveries Table -->
+            <div id="deliveriesListContainer">
+                <!-- Deliveries table will be loaded here via JS -->
+            </div>
+        </section>
+
+        <!-- Customers View -->
+        <section id="customersView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Customers</h2>
+            </div>
+
+            <!-- Search -->
+            <div class="search-section">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="customerSearch" placeholder="Search customers...">
+                </div>
+            </div>
+
+            <!-- Customers List -->
+            <div id="customersList" class="customers-list">
+                <!-- Customers will be loaded here -->
+            </div>
+        </section>
+
+        <!-- Notifications View -->
+        <section id="notificationsView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Notifications</h2>
+                <button class="btn btn-secondary" onclick="clearAllNotifications()">
+                    <i class="fas fa-trash"></i> Clear All
+                </button>
+            </div>
+
+            <div id="notificationsList" class="notifications-list">
+                <!-- Notifications will be loaded here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- QR Scanner Modal -->
+    <div id="scannerModal" class="modal hidden">
+        <!-- Same scanner modal as app.html -->
+    </div>
+
+    <!-- Customer Details Modal -->
+    <div id="customerDetailsModal" class="modal hidden">
+        <!-- Same customer details modal as app.html -->
+    </div>
+
+    <!-- Settings Modal for Staff -->
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Staff Settings</h3>
+                <button class="btn btn-close" onclick="closeModal('settingsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-section">
+                    <h4>Account Information</h4>
+                    <div class="setting-item">
+                        <label>Email</label>
+                        <input type="text" id="staffEmail" class="form-input" readonly style="background: var(--gray-100);">
+                    </div>
+                    <div class="setting-item">
+                        <label>Business</label>
+                        <input type="text" id="staffBusinessName" class="form-input" readonly style="background: var(--gray-100);">
+                    </div>
+                </div>
+
+                <div class="setting-section">
+                    <h4>Security</h4>
+                    <div class="setting-item">
+                        <label>Change Password</label>
+                        <input type="password" id="newPassword" class="form-input" placeholder="New Password" style="margin-bottom: 10px;">
+                        <input type="password" id="confirmNewPassword" class="form-input" placeholder="Confirm New Password">
+                        <button type="button" class="btn btn-outline" onclick="changePassword()" style="margin-top: 10px; width: 100%;">
+                            <i class="fas fa-key"></i> Update Password
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('settingsModal')">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item" onclick="showView('dashboard')">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </button>
+        
+        <button class="nav-item" onclick="showView('customers')">
+            <i class="fas fa-users"></i>
+            <span>Customers</span>
+        </button>
+        
+        <!-- Big Scanner Button -->
+        <div class="nav-scanner">
+            <button class="scanner-btn" onclick="openScanner()">
+                <i class="fas fa-qrcode"></i>
+            </button>
+        </div>
+        
+        <button class="nav-item" onclick="showView('deliveries')">
+            <i class="fas fa-truck"></i>
+            <span>Deliveries</span>
+        </button>
+        
+        <button class="nav-item" onclick="showNotifications()">
+            <i class="fas fa-bell"></i>
+            <span>Alerts</span>
+        </button>
+    </nav>
+
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+    <script src="staff.js"></script>
+</body>
+</html>
