@@ -45,55 +45,74 @@ class AuthManager {
 
     // Add this new method to ensure user data is loaded
 async ensureUserDataLoaded(user) {
+    // First check if we already have valid user data
     if (this.userData && this.userData.role) {
         console.log('User data already loaded:', this.userData.role);
         return true;
     }
     
-    console.log('Loading user data...');
+    console.log('Loading user data for user:', user.uid);
+    
+    // Try to load from localStorage first (fastest)
+    const cached = localStorage.getItem('userData');
+    if (cached) {
+        try {
+            const cachedData = JSON.parse(cached);
+            if (cachedData.uid === user.uid && cachedData.role) {
+                console.log('Using cached user data');
+                this.userData = cachedData;
+                return true;
+            }
+        } catch (e) {
+            console.log('Invalid cached data, clearing...');
+            localStorage.removeItem('userData');
+        }
+    }
+    
+    // If no cached data, load from Firestore with retry logic
     let attempts = 0;
-    const maxAttempts = 5;
+    const maxAttempts = 3; // Reduced from 5 to 3
     
     while (attempts < maxAttempts) {
         try {
+            console.log(`Loading user data attempt ${attempts + 1}/${maxAttempts}`);
             const success = await this.loadUserData(user);
+            
             if (success && this.userData && this.userData.role) {
-                console.log('User data loaded successfully:', this.userData.role);
+                console.log('User data loaded successfully on attempt', attempts + 1);
                 return true;
             }
             
             attempts++;
             if (attempts < maxAttempts) {
-                console.log(`Retrying user data load... (${attempts}/${maxAttempts})`);
-                await new Promise(resolve => setTimeout(resolve, 500));
+                console.log(`Retrying user data load in 1s... (${attempts}/${maxAttempts})`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         } catch (error) {
-            console.error('Error loading user data:', error);
+            console.error(`Error on attempt ${attempts + 1}:`, error);
             attempts++;
             if (attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
     }
     
     console.error('Failed to load user data after', maxAttempts, 'attempts');
+    
+    // Last resort: Try to create minimal user data if this is a new user
+    if (!this.userData) {
+        console.log('Creating minimal user data as fallback');
+        this.userData = {
+            uid: user.uid,
+            email: user.email,
+            role: 'owner', // Default to owner as fallback
+            ownerName: user.displayName || user.email.split('@')[0]
+        };
+        localStorage.setItem('userData', JSON.stringify(this.userData));
+        return true;
+    }
+    
     return false;
-}
-
-   redirectBasedOnRole() {
-    if (!this.userData || !this.userData.role) {
-        console.error('Cannot redirect: User data or role missing');
-        return;
-    }
-    
-    console.log('Redirecting based on role:', this.userData.role);
-    
-    // Use location.replace instead of href to prevent history issues
-    if (this.userData.role === 'staff') {
-        window.location.replace('staff.html');
-    } else {
-        window.location.replace('app.html');
-    }
 }
     
    setupFormHandlers() {
@@ -240,6 +259,43 @@ async handleLogin(e) {
         this.setFormLoading('loginForm', false);
     }
 }
+
+    // In auth.js - Replace the redirectBasedOnRole method
+
+redirectBasedOnRole() {
+    // If we don't have user data but have a current user, use fallback
+    if (!this.userData && this.currentUser) {
+        console.log('No user data available, using fallback data');
+        this.userData = {
+            uid: this.currentUser.uid,
+            email: this.currentUser.email,
+            role: 'owner', // Default fallback
+            ownerName: this.currentUser.displayName || this.currentUser.email.split('@')[0]
+        };
+    }
+    
+    if (!this.userData || !this.userData.role) {
+        console.error('Cannot redirect: User data or role missing', {
+            hasUserData: !!this.userData,
+            hasRole: !!(this.userData && this.userData.role),
+            userData: this.userData
+        });
+        
+        // Emergency fallback - redirect to app.html and let it handle the auth
+        console.log('Emergency fallback: redirecting to app.html');
+        window.location.replace('app.html');
+        return;
+    }
+    
+    console.log('Redirecting based on role:', this.userData.role);
+    
+    // Use location.replace instead of href to prevent history issues
+    if (this.userData.role === 'staff') {
+        window.location.replace('staff.html');
+    } else {
+        window.location.replace('app.html');
+    }
+}
     
     // Handle Password Reset
     async handlePasswordReset(e) {
@@ -378,30 +434,49 @@ async handleLogin(e) {
     }
     
      async loadUserData(user) {
-        try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const userDoc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
-            
-            if (userDoc.exists) {
-                this.userData = userDoc.data();
-                this.userData.uid = user.uid;
-                localStorage.setItem('userData', JSON.stringify(this.userData));
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('Error loading user data:', error);
+    try {
+        console.log('Loading user data for:', user.uid);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Firestore timeout')), 10000)
+        );
+        
+        const userDocPromise = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
+        
+        const userDoc = await Promise.race([userDocPromise, timeoutPromise]);
+        
+        if (userDoc.exists) {
+            this.userData = userDoc.data();
+            this.userData.uid = user.uid;
+            localStorage.setItem('userData', JSON.stringify(this.userData));
+            console.log('User data loaded successfully:', this.userData.role);
+            return true;
+        } else {
+            console.error('User document does not exist in Firestore');
             // Fallback: Check local storage if network fails
             const cached = localStorage.getItem('userData');
             if (cached) {
-                console.log('Using cached user data due to network error');
+                console.log('Using cached user data due to missing document');
                 this.userData = JSON.parse(cached);
                 return true;
             }
             return false;
         }
+    } catch (error) {
+        console.error('Error loading user data:', error);
+        // Fallback: Check local storage if network fails
+        const cached = localStorage.getItem('userData');
+        if (cached) {
+            console.log('Using cached user data due to network error');
+            this.userData = JSON.parse(cached);
+            return true;
+        }
+        return false;
     }
-
+}
+    
     updateUI() {
         // This is now handled mainly in app.js
     }
