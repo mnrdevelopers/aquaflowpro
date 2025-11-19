@@ -681,84 +681,19 @@ class AquaFlowApp {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const qrData = `AQUAFLOW:${customerId}:${this.userId}`;
             
-            // 1. Generate raw QR code on a temporary canvas
-            const qrCanvas = document.createElement('canvas');
+            // Generate clean QR code (just the code)
+            const canvas = document.createElement('canvas');
             if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
                 console.warn('QRCode library not loaded.');
                 return;
             }
             
-            await QRCode.toCanvas(qrCanvas, qrData, {
-                width: 250,
-                margin: 1,
+            await QRCode.toCanvas(canvas, qrData, {
+                width: 400, // High res for printing
+                margin: 2,
                 color: { dark: '#000000', light: '#FFFFFF' }
             });
 
-            // 2. Create the premium design canvas
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const width = 400;
-            const height = 550;
-            canvas.width = width;
-            canvas.height = height;
-
-            // Background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
-            
-            // Gradient Header
-            const gradient = ctx.createLinearGradient(0, 0, width, 0);
-            gradient.addColorStop(0, '#0066ff');
-            gradient.addColorStop(1, '#0047b3');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, 100);
-
-            // Business Name
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 24px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const businessName = this.userData?.businessName || 'AquaFlow Pro';
-            ctx.fillText(businessName, width / 2, 50);
-
-            // Subtitle
-            ctx.fillStyle = '#e6f0ff';
-            ctx.font = '14px Arial, sans-serif';
-            ctx.fillText('Water Delivery Service', width / 2, 75);
-
-            // Draw QR Code container background/shadow
-            ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 5;
-            ctx.fillRect(50, 130, 300, 300);
-            ctx.shadowColor = 'transparent'; // Reset shadow
-
-            // Draw Border around QR placeholder
-            ctx.strokeStyle = '#e9ecef';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(50, 130, 300, 300);
-
-            // Draw the QR code image from the temp canvas
-            ctx.drawImage(qrCanvas, 75, 155, 250, 250);
-
-            // Customer Name Footer
-            ctx.fillStyle = '#333333';
-            ctx.font = 'bold 18px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(customerData.name, width / 2, 460);
-
-            // Footer Instruction
-            ctx.fillStyle = '#666666';
-            ctx.font = '14px Arial, sans-serif';
-            ctx.fillText('Scan to record delivery', width / 2, 490);
-            
-            // Bottom accent line
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, height - 10, width, 10);
-
-            // 3. Convert final canvas to blob and upload
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             const apiKey = await getImgBBApiKey();
             
@@ -798,9 +733,11 @@ class AquaFlowApp {
                 return;
             }
             
+            // Always check if we need to regenerate (optional, but good if data changed)
+            // For now, stick to: if missing, generate.
             if (!customer.qrCodeUrl) {
-                // Try to generate it if missing
                 if(confirm("QR Code not generated yet. Generate now?")) {
+                     showSuccess("Generating QR Code...");
                      await this.generateAndStoreQRCode(customerId, customer);
                      // Reload data to get URL
                      await this.loadCustomers();
@@ -827,27 +764,82 @@ class AquaFlowApp {
              return;
         }
         
-        // Updated print window to simply show the premium image
+        const businessName = this.userData?.businessName || 'AquaFlow Pro';
+        
         qrWindow.document.write(`
             <html>
                 <head>
-                    <title>QR Code - ${customer.name}</title>
+                    <title>QR Card - ${customer.name}</title>
                     <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
                         body { 
-                            font-family: Arial, sans-serif; 
-                            text-align: center; 
-                            padding: 20px; 
-                            background: #f0f2f5;
+                            font-family: 'Inter', sans-serif; 
+                            background: #f3f4f6;
                             display: flex;
                             flex-direction: column;
                             align-items: center;
+                            justify-content: center;
                             min-height: 100vh;
+                            margin: 0;
+                            padding: 20px;
                         }
-                        .card-preview {
+                        .card {
+                            background: white;
+                            width: 350px;
+                            border-radius: 16px;
                             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-                            max-width: 100%;
-                            border-radius: 8px;
                             overflow: hidden;
+                            text-align: center;
+                            border: 1px solid #e5e7eb;
+                        }
+                        .card-header {
+                            background: linear-gradient(135deg, #0066ff 0%, #0047b3 100%);
+                            color: white;
+                            padding: 24px 20px;
+                        }
+                        .business-name {
+                            font-size: 1.5rem;
+                            font-weight: 700;
+                            margin: 0;
+                            line-height: 1.2;
+                        }
+                        .card-subtitle {
+                            font-size: 0.875rem;
+                            opacity: 0.9;
+                            margin-top: 4px;
+                        }
+                        .card-body {
+                            padding: 30px 20px;
+                        }
+                        .qr-image {
+                            width: 220px;
+                            height: 220px;
+                            object-fit: contain;
+                            border: 2px solid #f3f4f6;
+                            border-radius: 12px;
+                            margin-bottom: 20px;
+                            padding: 10px;
+                        }
+                        .customer-name {
+                            font-size: 1.25rem;
+                            font-weight: 700;
+                            color: #111827;
+                            margin: 0 0 8px 0;
+                        }
+                        .customer-details {
+                            color: #6b7280;
+                            font-size: 0.9rem;
+                            line-height: 1.5;
+                        }
+                        .scan-instruction {
+                            margin-top: 20px;
+                            padding-top: 20px;
+                            border-top: 1px dashed #e5e7eb;
+                            font-size: 0.8rem;
+                            color: #9ca3af;
+                            text-transform: uppercase;
+                            letter-spacing: 1px;
+                            font-weight: 600;
                         }
                         .btn-print { 
                             background: #0066ff; 
@@ -857,22 +849,42 @@ class AquaFlowApp {
                             cursor: pointer; 
                             font-size: 16px; 
                             margin-top: 30px; 
-                            border-radius: 6px; 
-                            font-weight: bold;
+                            border-radius: 8px; 
+                            font-weight: 600;
                             box-shadow: 0 4px 6px rgba(0,102,255,0.3);
                             transition: transform 0.2s;
                         }
                         .btn-print:hover { transform: translateY(-2px); }
+                        
                         @media print {
-                            body { background: white; padding: 0; }
+                            body { background: white; padding: 0; justify-content: flex-start; margin-top: 20px; }
+                            .card { box-shadow: none; border: 2px solid #e5e7eb; }
                             .btn-print { display: none; }
-                            .card-preview { box-shadow: none; }
                         }
                     </style>
                 </head>
                 <body>
-                    <img src="${customer.qrCodeUrl}" alt="QR Code Card" class="card-preview">
-                    <button class="btn-print" onclick="window.print()">Print QR Card</button>
+                    <div class="card">
+                        <div class="card-header">
+                            <h1 class="business-name">${businessName}</h1>
+                            <div class="card-subtitle">Water Delivery Service</div>
+                        </div>
+                        <div class="card-body">
+                            <img src="${customer.qrCodeUrl}" alt="QR Code" class="qr-image">
+                            
+                            <h2 class="customer-name">${customer.name}</h2>
+                            <div class="customer-details">
+                                <div>${customer.phone}</div>
+                                <div>${customer.address}</div>
+                            </div>
+                            
+                            <div class="scan-instruction">
+                                <svg style="width:16px;height:16px;vertical-align:middle;margin-right:4px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                                Scan to Record Delivery
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-print" onclick="window.print()">Print Card</button>
                 </body>
             </html>
         `);
