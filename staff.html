@@ -207,9 +207,64 @@
     </div>
 </div>
 
-    <!-- Customer Details Modal -->
+     <!-- Customer Details Modal -->
     <div id="customerDetailsModal" class="modal hidden">
-        <!-- Same customer details modal as app.html -->
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Customer Details</h3>
+                <button class="btn btn-close" onclick="closeModal('customerDetailsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="customer-details-content">
+                <div class="detail-section">
+                    <h4>Basic Information</h4>
+                    <div class="detail-item">
+                        <label>Name:</label>
+                        <span id="detailCustomerName">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Phone:</label>
+                        <span id="detailCustomerPhone">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Address:</label>
+                        <span id="detailCustomerAddress">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Type:</label>
+                        <span id="detailCustomerType">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Price per Can:</label>
+                        <span id="detailCustomerPrice">-</span>
+                    </div>
+                </div>
+                <div class="detail-section">
+                    <h4>Delivery Statistics</h4>
+                    <div class="detail-item">
+                        <label>Total Deliveries:</label>
+                        <span id="detailTotalDeliveries">0</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Total Cans:</label>
+                        <span id="detailTotalCans">0</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>This Month:</label>
+                        <span id="detailThisMonth">0 cans</span>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="editCustomerFromDetails()">
+                        <i class="fas fa-edit"></i> Edit Customer
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteCustomerFromDetails()" data-role="owner">
+                        <i class="fas fa-trash"></i> Delete Customer
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Settings Modal for Staff -->
