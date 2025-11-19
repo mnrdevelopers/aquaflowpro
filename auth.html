@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - AquaFlow Pro</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Added Icon to fix 404 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💧</text></svg>">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
+</head>
+<body class="auth-page">
+    <div class="container">
+        <!-- Back Button -->
+        <div class="auth-header">
+            <button class="btn btn-back" onclick="goToHome()">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+        </div>
+
+        <div class="auth-container">
+            <!-- Logo -->
+            <div class="auth-logo">
+                <div class="logo-icon">
+                    <i class="fas fa-tint"></i>
+                </div>
+                <h2>AquaFlow Pro</h2>
+                <p>Manage your water delivery business</p>
+            </div>
+
+            <!-- Tabs -->
+            <div class="auth-tabs" id="authTabs">
+                <button class="tab-btn active" onclick="showTab('login')">Sign In</button>
+                <button class="tab-btn" onclick="showTab('signup')">Sign Up</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form active">
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="loginEmail" placeholder="Your email address" required>
+                </div>
+                
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="loginPassword" placeholder="Your password" required>
+                    <button type="button" class="btn btn-eye" onclick="togglePassword('loginPassword')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+
+                <div style="text-align: right; margin-bottom: 1rem;">
+                    <a href="#" onclick="showTab('reset')" style="color: var(--primary); text-decoration: none; font-size: 0.9rem;">Forgot Password?</a>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Sign In
+                </button>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="signupForm" class="auth-form">
+                <!-- Role Selection -->
+                <div style="margin-bottom: 1rem; background: var(--gray-100); padding: 10px; border-radius: 8px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="isStaffCheckbox" onchange="toggleSignupMode()" style="width: auto; margin-right: 10px;">
+                        <span style="font-weight: 600; color: var(--gray-800);">I am a Delivery Driver/Staff</span>
+                    </label>
+                </div>
+
+                <!-- Common Fields -->
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="ownerName" placeholder="Your full name" required>
+                </div>
+
+                <!-- Owner Specific Fields -->
+                <div id="ownerFields">
+                    <div class="input-group">
+                        <i class="fas fa-store"></i>
+                        <input type="text" id="businessName" placeholder="Your business name">
+                    </div>
+                    
+                    <div class="input-group">
+                        <i class="fas fa-phone"></i>
+                        <input type="tel" id="businessPhone" placeholder="Business phone number">
+                    </div>
+
+                    <div class="input-group">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <input type="text" id="businessAddress" placeholder="Business address">
+                    </div>
+                </div>
+
+                <!-- Staff Specific Fields -->
+                <div id="staffFields" class="hidden">
+                    <div class="input-group" style="border: 2px solid var(--primary); border-radius: 8px;">
+                        <i class="fas fa-id-card" style="color: var(--primary);"></i>
+                        <input type="text" id="businessOwnerId" placeholder="Paste Business Owner ID here">
+                    </div>
+                    <p class="text-sm text-muted" style="margin-bottom: 1rem; padding-left: 5px;">
+                        Ask the business owner for their ID found in Settings.
+                    </p>
+                </div>
+                
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="signupEmail" placeholder="Email address" required>
+                </div>
+                
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="signupPassword" placeholder="Create password (min. 6 characters)" required minlength="6">
+                    <button type="button" class="btn btn-eye" onclick="togglePassword('signupPassword')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+
+                <div id="priceField" class="input-group">
+                    <i class="fas fa-rupee-sign"></i>
+                    <input type="number" id="defaultPrice" placeholder="Default price per 20L can" value="20" min="1">
+                </div>
+
+                <button type="submit" class="btn btn-success btn-block" id="signupBtn">
+                    <i class="fas fa-user-plus"></i>
+                    Create Business Account
+                </button>
+            </form>
+
+            <!-- Password Reset Form -->
+            <form id="resetForm" class="auth-form">
+                <div style="text-align: center; margin-bottom: 1.5rem;">
+                    <h3>Reset Password</h3>
+                    <p style="color: var(--gray-600); font-size: 0.9rem;">Enter your email to receive a reset link</p>
+                </div>
+
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="resetEmail" placeholder="Your email address" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-paper-plane"></i>
+                    Send Reset Link
+                </button>
+                
+                <button type="button" class="btn btn-outline btn-block" onclick="showTab('login')" style="margin-top: 1rem;">
+                    Back to Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+    
+    <script>
+        function goToHome() {
+            window.location.href = 'index.html';
+        }
+
+        function showTab(tabName) {
+            // Update active tab buttons
+            const tabsContainer = document.getElementById('authTabs');
+            if (tabName === 'reset') {
+                tabsContainer.style.display = 'none'; // Hide tabs for reset view
+            } else {
+                tabsContainer.style.display = 'flex';
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                // Simple logic to activate correct tab
+                const buttons = document.querySelectorAll('.tab-btn');
+                if(tabName === 'login' && buttons[0]) buttons[0].classList.add('active');
+                if(tabName === 'signup' && buttons[1]) buttons[1].classList.add('active');
+            }
+
+            // Show correct form
+            document.querySelectorAll('.auth-form').forEach(form => form.classList.remove('active'));
+            const activeForm = document.getElementById(tabName + 'Form');
+            if (activeForm) activeForm.classList.add('active');
+        }
+
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const icon = input.parentNode.querySelector('.btn-eye i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        function toggleSignupMode() {
+            const isStaff = document.getElementById('isStaffCheckbox').checked;
+            const ownerFields = document.getElementById('ownerFields');
+            const staffFields = document.getElementById('staffFields');
+            const priceField = document.getElementById('priceField');
+            const signupBtn = document.getElementById('signupBtn');
+            const businessName = document.getElementById('businessName');
+            const businessPhone = document.getElementById('businessPhone');
+            const businessAddress = document.getElementById('businessAddress');
+            const businessOwnerId = document.getElementById('businessOwnerId');
+
+            if (isStaff) {
+                ownerFields.classList.add('hidden');
+                priceField.classList.add('hidden');
+                staffFields.classList.remove('hidden');
+                
+                // Remove required from owner fields
+                businessName.removeAttribute('required');
+                businessPhone.removeAttribute('required');
+                businessAddress.removeAttribute('required');
+                
+                // Add required to staff fields
+                businessOwnerId.setAttribute('required', 'true');
+                
+                signupBtn.innerHTML = '<i class="fas fa-id-badge"></i> Create Staff Account';
+                signupBtn.className = 'btn btn-primary btn-block'; // Blue for staff
+            } else {
+                ownerFields.classList.remove('hidden');
+                priceField.classList.remove('hidden');
+                staffFields.classList.add('hidden');
+                
+                // Add required back
+                businessName.setAttribute('required', 'true');
+                businessPhone.setAttribute('required', 'true');
+                businessAddress.setAttribute('required', 'true');
+                
+                // Remove required from staff
+                businessOwnerId.removeAttribute('required');
+                
+                signupBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Business Account';
+                signupBtn.className = 'btn btn-success btn-block'; // Green for owner
+            }
+        }
+    </script>
+</body>
+</html>
