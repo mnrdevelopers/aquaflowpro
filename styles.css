@@ -525,7 +525,6 @@ textarea.form-input {
     border: none;
     color: var(--gray-500);
     cursor: pointer;
-    padding: var(--space-sm);
     border-radius: var(--radius-sm);
     z-index: 3;
     width: auto;
