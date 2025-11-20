@@ -1764,16 +1764,6 @@ textarea.form-input {
     border-radius: var(--radius-full);
 }
 
-.status-online {
-    background: var(--success);
-    color: var(--white);
-}
-
-.status-offline {
-    background: var(--warning);
-    color: var(--gray-800);
-}
-
 /* Loading overlay for PWA */
 .loading-overlay {
     position: fixed;
