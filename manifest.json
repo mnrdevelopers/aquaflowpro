@@ -2,7 +2,7 @@
   "name": "AquaFlow Pro",
   "short_name": "AquaFlow",
   "description": "Professional Water Delivery Management System",
-  "start_url": "/aquaflowpro/",
+  "start_url": "https://mnrdevelopers.github.io/aquaflowpro/",
   "display": "standalone",
   "background_color": "#0066ff",
   "theme_color": "#0066ff",
