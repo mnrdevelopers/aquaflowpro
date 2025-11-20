@@ -26,6 +26,15 @@ class AquaFlowApp {
         this.init();
     }
 
+     initPWA() {
+        // Request notification permission on app start
+        if (window.pwaHandler) {
+            setTimeout(() => {
+                pwaHandler.requestNotificationPermission();
+            }, 3000);
+        }
+    }
+
     async init() {
     console.log('App initialization started');
     
