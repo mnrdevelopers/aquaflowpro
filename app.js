@@ -27,22 +27,29 @@ class AquaFlowApp {
     }
 
     async init() {
-        console.log('App initialization started');
-        
-        await this.waitForAuthState();
-        
-        const authDataReady = await this.checkAuthentication();
-        
-        if (!authDataReady) {
-            console.log('Authentication check failed, stopping app initialization');
-            return;
-        }
-
-        this.setupEventListeners();
-        await this.loadInitialData();
-        this.updateUI();
-        console.log('App initialization completed successfully');
+    console.log('App initialization started');
+    
+    // Show loading immediately
+    this.showLoading();
+    
+    await this.waitForAuthState();
+    
+    const authDataReady = await this.checkAuthentication();
+    
+    if (!authDataReady) {
+        console.log('Authentication check failed, stopping app initialization');
+        this.hideLoading();
+        return;
     }
+
+    this.setupEventListeners();
+    await this.loadInitialData();
+    this.updateUI();
+    console.log('App initialization completed successfully');
+    
+    // Hide loading when everything is ready
+    this.hideLoading();
+}
 
     async waitForAuthState() {
         let attempts = 0;
@@ -108,7 +115,53 @@ class AquaFlowApp {
         });
     }
 
+    showLoading() {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('hidden');
+    }
+}
+
+hideLoading() {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+    }
+}
+
+    showSkeletonLoading() {
+    // Add skeleton loading for dashboard stats
+    const statsGrid = document.querySelector('.stats-grid');
+    if (statsGrid) {
+        statsGrid.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="skeleton skeleton-stat"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </div>
+                <div class="stat-icon skeleton"></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="skeleton skeleton-stat"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </div>
+                <div class="stat-icon skeleton"></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="skeleton skeleton-stat"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </div>
+                <div class="stat-icon skeleton"></div>
+            </div>
+        `;
+    }
+}
+
     async loadInitialData() {
+    try {
+        this.showLoading();
         await Promise.all([
             this.loadCustomers(),
             this.loadCurrentMonthDeliveries(), 
@@ -117,37 +170,86 @@ class AquaFlowApp {
         ]);
         this.updateDashboard();
         console.log('App initialization complete.');
+    } catch (error) {
+        console.error('Error loading initial data:', error);
+        showError('Failed to load data');
+    } finally {
+        this.hideLoading();
     }
+}
 
-    async loadCustomers() {
-        try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            
-            if (!this.userId) {
-                throw new Error('User ID is undefined. Cannot load customers.');
-            }
-            
-            const customersCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers');
-            
-            const snapshot = await customersCollectionRef
-                .orderBy('name')
-                .get();
-            
-            this.customers = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            
-            this.filteredCustomers = [...this.customers];
-
-            this.displayCustomers();
-            this.loadCustomerSelect();
-            
-        } catch (error) {
-            console.error('Error loading customers:', error);
-            showError('Failed to load customers'); 
+   async loadCustomers() {
+    try {
+        // Show skeleton loading for customers list
+        const container = document.getElementById('customersList');
+        if (container) {
+            container.innerHTML = `
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Contact</th>
+                                <th>Stats</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Array(5).fill(0).map(() => `
+                                <tr>
+                                    <td><div class="skeleton skeleton-text"></div></td>
+                                    <td><div class="skeleton skeleton-text" style="width: 60px;"></div></td>
+                                    <td>
+                                        <div class="skeleton skeleton-text"></div>
+                                        <div class="skeleton skeleton-text" style="width: 80%;"></div>
+                                    </td>
+                                    <td>
+                                        <div class="skeleton skeleton-text"></div>
+                                        <div class="skeleton skeleton-text" style="width: 70%;"></div>
+                                    </td>
+                                    <td>
+                                        <div class="action-buttons-row">
+                                            <div class="skeleton" style="width: 30px; height: 30px; border-radius: 50%;"></div>
+                                            <div class="skeleton" style="width: 30px; height: 30px; border-radius: 50%;"></div>
+                                            <div class="skeleton" style="width: 30px; height: 30px; border-radius: 50%;"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        if (!this.userId) {
+            throw new Error('User ID is undefined. Cannot load customers.');
+        }
+        
+        const customersCollectionRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers');
+        
+        const snapshot = await customersCollectionRef
+            .orderBy('name')
+            .get();
+        
+        this.customers = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        
+        this.filteredCustomers = [...this.customers];
+
+        this.displayCustomers();
+        this.loadCustomerSelect();
+        
+    } catch (error) {
+        console.error('Error loading customers:', error);
+        showError('Failed to load customers'); 
     }
+}
 
     async loadCurrentMonthDeliveries() {
         try {
