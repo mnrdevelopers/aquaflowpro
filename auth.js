@@ -19,19 +19,24 @@ class AuthManager {
             this.authStateReady = true;
             
             if (user) {
-                // User is signed in
-                const userDataLoaded = await this.loadUserData(user);
-                
-                // Redirect if on auth page AND user data is loaded
-                if (window.location.pathname.includes('auth.html') && userDataLoaded) {
-                    console.log('Redirecting to app.html - User authenticated with data');
+                // === UPDATED: Redirect Logic ===
+                // If we are on auth.html or index.html, redirect immediately to app
+                const path = window.location.pathname;
+                if (path.endsWith('auth.html') || path.endsWith('index.html') || path.endsWith('/')) {
+                    console.log('User authenticated, redirecting to app.html');
                     window.location.href = 'app.html';
+                    return;
                 }
+
+                // Load user data if we are already in the app
+                await this.loadUserData(user);
+                
             } else {
                 // User is signed out
                 this.userData = null;
                 localStorage.removeItem('userData');
                 
+                // If we are on app.html, kick them out to auth.html
                 if (window.location.pathname.includes('app.html')) {
                     console.log('Redirecting to auth.html - User signed out');
                     window.location.href = 'auth.html';
@@ -62,98 +67,111 @@ class AuthManager {
     }
 }
 
+    // === VALIDATION LOGIC ===
     setupInputValidation(form) {
-    const inputs = form.querySelectorAll('input[required]');
-    inputs.forEach(input => {
-        input.addEventListener('blur', () => this.validateInput(input));
-        input.addEventListener('input', () => this.clearInputError(input));
-    });
-}
+        const inputs = form.querySelectorAll('input[required]');
+        inputs.forEach(input => {
+            input.addEventListener('blur', () => this.validateInput(input));
+            input.addEventListener('input', () => this.clearInputError(input));
+        });
+    }
 
-validateInput(input) {
-    this.clearInputError(input);
-    
-    // Skip validation for hidden inputs (based on role selection)
-    if (input.offsetParent === null) {
+    validateInput(input) {
+        this.clearInputError(input);
+        
+        // Skip validation for hidden inputs (based on role selection, if any)
+        if (input.offsetParent === null) {
+            return true;
+        }
+        
+        // Check Empty
+        if (!input.value.trim()) {
+            this.showInputError(input, 'This field is required');
+            return false;
+        }
+
+        // Check Email
+        if (input.type === 'email' && !this.isValidEmail(input.value)) {
+            this.showInputError(input, 'Please enter a valid email address');
+            return false;
+        }
+
+        // Check Phone
+        if (input.type === 'tel' && !this.isValidPhone(input.value)) {
+            this.showInputError(input, 'Please enter a valid 10-digit phone number');
+            return false;
+        }
+
+        // Check Password
+        if (input.type === 'password' && input.value.length < 6) {
+            this.showInputError(input, 'Password must be at least 6 characters');
+            return false;
+        }
+
+        this.showInputSuccess(input);
         return true;
     }
-    
-    if (!input.value.trim()) {
-        this.showInputError(input, 'This field is required');
-        return false;
+
+    isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
     }
 
-    if (input.type === 'email' && !this.isValidEmail(input.value)) {
-        this.showInputError(input, 'Please enter a valid email address');
-        return false;
+    isValidPhone(phone) {
+        // Strips non-digits and checks for exactly 10 digits
+        const phoneRegex = /^[0-9]{10}$/;
+        return phoneRegex.test(phone.replace(/\D/g, ''));
     }
 
-    if (input.type === 'tel' && !this.isValidPhone(input.value)) {
-        this.showInputError(input, 'Please enter a valid phone number');
-        return false;
+    showInputError(input, message) {
+        this.clearInputError(input);
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'input-error';
+        errorDiv.style.color = '#dc3545'; // Added inline style for visibility
+        errorDiv.style.fontSize = '0.8rem';
+        errorDiv.style.marginTop = '4px';
+        errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+        
+        input.parentNode.appendChild(errorDiv);
+        input.style.borderColor = '#dc3545'; // var(--danger)
     }
 
-    if (input.type === 'password' && input.value.length < 6) {
-        this.showInputError(input, 'Password must be at least 6 characters');
-        return false;
+    showInputSuccess(input) {
+        input.style.borderColor = '#28a745'; // var(--success)
     }
 
-    this.showInputSuccess(input);
-    return true;
-}
-
-isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
-
-isValidPhone(phone) {
-    const phoneRegex = /^[0-9]{10}$/;
-    return phoneRegex.test(phone.replace(/\D/g, ''));
-}
-
-showInputError(input, message) {
-    this.clearInputError(input);
-    
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'input-error';
-    errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
-    
-    input.parentNode.appendChild(errorDiv);
-    input.style.borderColor = 'var(--danger)';
-}
-
-showInputSuccess(input) {
-    input.style.borderColor = 'var(--success)';
-}
-
-clearInputError(input) {
-    const errorDiv = input.parentNode.querySelector('.input-error');
-    if (errorDiv) {
-        errorDiv.remove();
+    clearInputError(input) {
+        const errorDiv = input.parentNode.querySelector('.input-error');
+        if (errorDiv) {
+            errorDiv.remove();
+        }
+        input.style.borderColor = '';
     }
-    input.style.borderColor = '';
-}
     
    async handleLogin(e) {
     e.preventDefault();
     
+    // Perform full form validation before submitting
+    const inputs = document.querySelectorAll('#loginForm input[required]');
+    let isValid = true;
+    inputs.forEach(input => {
+        if (!this.validateInput(input)) isValid = false;
+    });
+
+    if (!isValid) return;
+    
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
-    
-    if (!this.validateInput(document.getElementById('loginEmail')) || 
-        !this.validateInput(document.getElementById('loginPassword'))) {
-        return;
-    }
     
     try {
         this.setFormLoading('loginForm', true);
         await auth.signInWithEmailAndPassword(email, password);
         showSuccess('Welcome back!');
+        // Redirect handled by listener
     } catch (error) {
         console.error('Login error:', error);
         this.handleAuthError(error);
-    } finally {
         this.setFormLoading('loginForm', false);
     }
 }
@@ -194,18 +212,25 @@ clearInputError(input) {
    async handleSignup(e) {
         e.preventDefault();
         
+        // Perform full form validation before submitting
+        const inputs = document.querySelectorAll('#signupForm input[required]');
+        let isValid = true;
+        inputs.forEach(input => {
+            if (!this.validateInput(input)) isValid = false;
+        });
+
+        if (!isValid) return;
+        
         const email = document.getElementById('signupEmail').value;
         const password = document.getElementById('signupPassword').value;
         const ownerName = document.getElementById('ownerName').value;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
-        // Business Owner Validation
         const businessName = document.getElementById('businessName').value;
         const businessPhone = document.getElementById('businessPhone').value;
         const businessAddress = document.getElementById('businessAddress').value;
         const defaultPrice = parseInt(document.getElementById('defaultPrice').value) || 20;
 
-        // Prepare Data object - simplified, no staff roles
         let userData = {
             email,
             ownerName,
@@ -234,32 +259,28 @@ clearInputError(input) {
 
             // Save User Data
             try {
-                // Write own user document
+                // Write own user document using STRICT PATH
                 await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
             } catch (firestoreError) {
                 console.error('Firestore write error:', firestoreError);
                 await user.delete(); // Rollback
-                throw new Error('Failed to create profile. Please try again.');
+                throw new Error('Failed to create profile. Database error.');
             }
 
             showSuccess('Business account created!');
-            
-            setTimeout(() => {
-                window.location.href = 'app.html';
-            }, 2000);
+            // Redirect handled by listener
             
         } catch (error) {
             console.error('Signup error:', error);
             this.handleAuthError(error);
-        } finally {
             this.setFormLoading('signupForm', false);
         }
     }
 
     setFormLoading(formId, isLoading) {
         const form = document.getElementById(formId);
-        const submitBtn = form.querySelector('button[type="submit"]');
         if(!form) return;
+        const submitBtn = form.querySelector('button[type="submit"]');
 
         if (isLoading) {
             form.classList.add('loading');
@@ -279,6 +300,7 @@ clearInputError(input) {
      async loadUserData(user) {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // Using STRICT PATH rule from system instructions
             const userDoc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
             
             if (userDoc.exists) {
@@ -292,10 +314,6 @@ clearInputError(input) {
             console.error('Error loading user data:', error);
             return false;
         }
-    }
-
-    updateUI() {
-        // This is now handled mainly in app.js
     }
 
   handleAuthError(error) {
@@ -321,7 +339,7 @@ clearInputError(input) {
                 message = 'Network error. Please check your internet connection.';
                 break;
             default:
-                if (error.message.includes('Firestore write error') || error.message.includes('verification failed')) {
+                if (error.message && (error.message.includes('Firestore') || error.message.includes('verification'))) {
                     message = error.message;
                 }
                 break;
@@ -335,6 +353,9 @@ clearInputError(input) {
             await auth.signOut();
             localStorage.removeItem('userData');
             showSuccess('Signed out successfully');
+            setTimeout(() => {
+                window.location.href = 'auth.html';
+            }, 1000);
         } catch (error) {
             console.error('Logout error:', error);
             showError('Error signing out');
