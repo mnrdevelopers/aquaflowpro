@@ -10,6 +10,8 @@ class PWAHandler {
         this.setupInstallPrompt();
         this.setupOfflineDetection();
         this.checkStandaloneMode();
+        // New: Check specifically for iOS
+        this.checkIOS();
     }
 
     // Register Service Worker
@@ -36,7 +38,7 @@ class PWAHandler {
         }
     }
 
-    // Handle install prompt
+    // Handle install prompt (Android/Desktop)
     setupInstallPrompt() {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -52,12 +54,9 @@ class PWAHandler {
         });
     }
 
-    // Show install prompt
+    // Show install prompt (Android/Desktop)
     showInstallPrompt() {
-        // Don't show if already installed or in standalone mode
         if (this.isInStandaloneMode()) return;
-        
-        // Don't show multiple prompts
         if (document.getElementById('installPrompt')) return;
 
         const installPrompt = document.createElement('div');
@@ -83,34 +82,68 @@ class PWAHandler {
         `;
         
         document.body.appendChild(installPrompt);
-        
-        // Auto-hide after 15 seconds
-        setTimeout(() => {
-            this.hideInstallPrompt();
-        }, 15000);
     }
 
     hideInstallPrompt() {
         const prompt = document.getElementById('installPrompt');
-        if (prompt) {
-            prompt.remove();
-        }
+        if (prompt) prompt.remove();
     }
 
     async installApp() {
         if (this.deferredPrompt) {
             this.deferredPrompt.prompt();
             const { outcome } = await this.deferredPrompt.userChoice;
-            
             if (outcome === 'accepted') {
                 console.log('User accepted the install prompt');
-            } else {
-                console.log('User dismissed the install prompt');
             }
-            
             this.deferredPrompt = null;
             this.hideInstallPrompt();
         }
+    }
+
+    // === NEW: iOS Specific Logic ===
+    checkIOS() {
+        // Detects iPhone, iPad, iPod, or iPad pretending to be Mac (new iPadOS)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+        
+        // Only show if not already installed and on iOS
+        if (isIOS && !this.isInStandaloneMode()) {
+            // Check if user previously dismissed it
+            if (!sessionStorage.getItem('iosInstallDismissed')) {
+                setTimeout(() => this.showIOSInstallPrompt(), 3000);
+            }
+        }
+    }
+
+    showIOSInstallPrompt() {
+        if (document.getElementById('iosInstallPrompt')) return;
+
+        const prompt = document.createElement('div');
+        prompt.id = 'iosInstallPrompt';
+        // Reusing install-prompt class for consistent styling, but with specific iOS content
+        prompt.innerHTML = `
+            <div class="install-prompt" style="border-color: #0066ff;">
+                <div class="install-content">
+                    <i class="fas fa-share-square" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <h4>Install on iPhone</h4>
+                        <p style="font-size: 0.85rem;">Tap the <strong>Share</strong> button <i class="fas fa-share-square"></i> and select <strong>"Add to Home Screen"</strong> <i class="fas fa-plus-square"></i></p>
+                    </div>
+                </div>
+                <div class="install-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="pwaHandler.dismissIOSPrompt()">
+                        Got it
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(prompt);
+    }
+
+    dismissIOSPrompt() {
+        const prompt = document.getElementById('iosInstallPrompt');
+        if (prompt) prompt.remove();
+        sessionStorage.setItem('iosInstallDismissed', 'true');
     }
 
     // Offline detection
@@ -124,7 +157,6 @@ class PWAHandler {
             this.updateOnlineStatus(false);
         });
 
-        // Initial status
         this.updateOnlineStatus(navigator.onLine);
     }
 
@@ -161,21 +193,16 @@ class PWAHandler {
 
     hideOfflineNotification() {
         const notification = document.getElementById('offlineNotification');
-        if (notification) {
-            notification.remove();
-        }
+        if (notification) notification.remove();
     }
 
     // Sync data when back online
     async syncOfflineData() {
         console.log('Syncing offline data...');
-        this.showSuccess('Back online! Syncing data...');
-        
-        // Reload app data if app exists
         if (window.app && typeof window.app.loadInitialData === 'function') {
             try {
                 await window.app.loadInitialData();
-                this.showSuccess('Data synced successfully!');
+                this.showSuccess('Back online! Data synced.');
             } catch (error) {
                 console.error('Sync failed:', error);
             }
@@ -225,9 +252,7 @@ class PWAHandler {
 
     hideUpdateNotification() {
         const notification = document.getElementById('updateNotification');
-        if (notification) {
-            notification.remove();
-        }
+        if (notification) notification.remove();
     }
 
     updateApp() {
@@ -256,7 +281,6 @@ class PWAHandler {
         return Notification.permission;
     }
 
-    // Show local notification
     showLocalNotification(title, body) {
         if ('Notification' in window && Notification.permission === 'granted') {
             const options = {
@@ -266,13 +290,18 @@ class PWAHandler {
                 tag: 'aquaflow-notification'
             };
             
-            new Notification(title, options);
+            // Check if service worker registration is available for mobile notifications
+            if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification(title, options);
+                });
+            } else {
+                new Notification(title, options);
+            }
         }
     }
 
-    // Utility function to show success messages
     showSuccess(message) {
-        // Use existing showSuccess function or create a simple one
         if (typeof showSuccess === 'function') {
             showSuccess(message);
         } else {
