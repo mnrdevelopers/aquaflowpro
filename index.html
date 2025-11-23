@@ -10,20 +10,18 @@
     <meta name="theme-color" content="#0066ff">
 
     <!-- PWA Meta Tags -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0066ff">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="AquaFlow Pro">
-<link rel="apple-touch-icon" href="android/android-launchericon-192-192.png">
-<meta name="msapplication-TileColor" content="#0066ff">
-<meta name="msapplication-TileImage" content="android/android-launchericon-144-144.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="AquaFlow Pro">
+    <link rel="apple-touch-icon" href="android/android-launchericon-192-192.png">
+    <meta name="msapplication-TileColor" content="#0066ff">
+    <meta name="msapplication-TileImage" content="android/android-launchericon-144-144.png">
     
     <!-- Firebase SDKs -->
-   <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
 </head>
 <body class="welcome-page">
     <div class="container">
@@ -70,17 +68,35 @@
     </div>
 
     <!-- Loading Overlay -->
-<div id="loadingOverlay" class="loading-overlay hidden">
-    <div class="loader-container">
-        <div class="loader"></div>
-        <p>Loading AquaFlow Pro...</p>
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loader-container">
+            <div class="loader"></div>
+            <p>Loading AquaFlow Pro...</p>
+        </div>
     </div>
-</div>
 
-<!-- PWA Script -->
-<script src="pwa.js"></script>
+    <!-- Firebase Config & PWA Script -->
+    <script src="firebase-config.js"></script>
+    <script src="pwa.js"></script>
 
     <script>
+        // === NEW: Auto-Redirect Logic ===
+        // Check if user is already logged in. If so, skip landing page.
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        // Show loading while checking auth state
+        if(loadingOverlay) loadingOverlay.classList.remove('hidden');
+
+        firebase.auth().onAuthStateChanged(function(user) {
+            if (user) {
+                console.log("User already logged in, redirecting to app...");
+                window.location.href = 'app.html';
+            } else {
+                // User is not logged in, hide loading and show landing page
+                if(loadingOverlay) loadingOverlay.classList.add('hidden');
+            }
+        });
+
         function goToAuth() {
             window.location.href = 'auth.html';
         }
