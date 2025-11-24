@@ -101,5 +101,19 @@
             window.location.href = 'auth.html';
         }
     </script>
+
+    <script>
+// Force service worker update on page load
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/aquaflowpro/sw.js').then(function(registration) {
+            console.log('SW registered: ', registration);
+            registration.update(); // Force update
+        }).catch(function(registrationError) {
+            console.log('SW registration failed: ', registrationError);
+        });
+    });
+}
+</script>
 </body>
 </html>
