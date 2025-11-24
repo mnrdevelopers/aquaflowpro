@@ -67,13 +67,7 @@
         </div>
     </div>
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay hidden">
-        <div class="loader-container">
-            <div class="loader"></div>
-            <p>Loading AquaFlow Pro...</p>
-        </div>
-    </div>
+    <!-- REMOVED: Loading Overlay from index.html -->
 
     <!-- Firebase Config & PWA Script -->
     <script src="firebase-config.js"></script>
@@ -82,18 +76,15 @@
     <script>
         // === NEW: Auto-Redirect Logic ===
         // Check if user is already logged in. If so, skip landing page.
-        const loadingOverlay = document.getElementById('loadingOverlay');
+        // No loading overlay needed on landing page
         
-        // Show loading while checking auth state
-        if(loadingOverlay) loadingOverlay.classList.remove('hidden');
-
         firebase.auth().onAuthStateChanged(function(user) {
             if (user) {
                 console.log("User already logged in, redirecting to app...");
                 window.location.href = 'app.html';
             } else {
-                // User is not logged in, hide loading and show landing page
-                if(loadingOverlay) loadingOverlay.classList.add('hidden');
+                // User is not logged in, show landing page normally
+                console.log("User not logged in, showing landing page");
             }
         });
 
@@ -101,19 +92,5 @@
             window.location.href = 'auth.html';
         }
     </script>
-
-    <script>
-// Force service worker update on page load
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/aquaflowpro/sw.js').then(function(registration) {
-            console.log('SW registered: ', registration);
-            registration.update(); // Force update
-        }).catch(function(registrationError) {
-            console.log('SW registration failed: ', registrationError);
-        });
-    });
-}
-</script>
 </body>
 </html>
