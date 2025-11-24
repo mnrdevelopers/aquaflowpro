@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aquaflow-pro-v2.1.0';
+const CACHE_NAME = 'aquaflow-pro-v2.2.0'; // Incremented version
 const urlsToCache = [
   '/aquaflowpro/',
   '/aquaflowpro/index.html',
@@ -19,20 +19,26 @@ const urlsToCache = [
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing...');
+  console.log('Service Worker installing... v2.2.0');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Opened cache');
+        console.log('Opened cache v2.2.0');
         return cache.addAll(urlsToCache);
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log('All resources cached successfully v2.2.0');
+        return self.skipWaiting();
+      })
+      .catch((error) => {
+        console.error('Cache installation failed:', error);
+      })
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating...');
+  console.log('Service Worker activating v2.2.0...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -43,58 +49,65 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      console.log('Service Worker activated v2.2.0');
+      return self.clients.claim();
+    })
   );
 });
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and external URLs
-  if (event.request.method !== 'GET' || !event.request.url.includes('mnrdevelopers.github.io')) {
+  if (event.request.method !== 'GET') {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version
-        if (response) {
-          return response;
-        }
-
-        // Fetch from network
-        return fetch(event.request).then((response) => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+  // For same-origin requests, use cache-first strategy
+  if (event.request.url.includes('mnrdevelopers.github.io/aquaflowpro')) {
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => {
+          // Return cached version if available
+          if (response) {
             return response;
           }
 
-          // Clone for cache
-          const responseToCache = response.clone();
+          // Fetch from network
+          return fetch(event.request).then((response) => {
+            // Check if valid response
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
 
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
+            // Clone for cache
+            const responseToCache = response.clone();
 
-          return response;
-        });
-      }).catch(() => {
-        // Fallback for HTML pages
-        if (event.request.destination === 'document') {
-          return caches.match('/aquaflowpro/offline.html');
-        }
-        // Return offline icon for images
-        if (event.request.destination === 'image') {
-          return caches.match('/aquaflowpro/icons/icon-192x192.png');
-        }
-      })
-  );
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+
+            return response;
+          });
+        }).catch(() => {
+          // Fallback for HTML pages
+          if (event.request.destination === 'document') {
+            return caches.match('/aquaflowpro/index.html');
+          }
+        })
+    );
+  }
 });
 
 // Handle messages from the client
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('Skipping waiting - activating new service worker');
     self.skipWaiting();
+  }
+  
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.ports[0].postMessage(CACHE_NAME);
   }
 });
