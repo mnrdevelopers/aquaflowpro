@@ -35,11 +35,15 @@ class AquaFlowApp {
         }
     }
 
-    async init() {
+ async init() {
     console.log('App initialization started');
     
-    // Show loading immediately
-    this.showLoading();
+    // Show loading immediately - BUT only if not already showing
+    if (!document.getElementById('loadingOverlay').classList.contains('hidden')) {
+        this.showLoading();
+    } else {
+        this.showLoading();
+    }
     
     await this.waitForAuthState();
     
@@ -56,7 +60,7 @@ class AquaFlowApp {
     this.updateUI();
     console.log('App initialization completed successfully');
     
-    // Hide loading when everything is ready
+    // Hide loading when everything is ready - ensure it only hides once
     this.hideLoading();
 }
 
@@ -168,9 +172,9 @@ hideLoading() {
     }
 }
 
-    async loadInitialData() {
+   async loadInitialData() {
     try {
-        this.showLoading();
+        // REMOVE this.showLoading() from here - it's already shown in init()
         await Promise.all([
             this.loadCustomers(),
             this.loadCurrentMonthDeliveries(), 
@@ -182,11 +186,10 @@ hideLoading() {
     } catch (error) {
         console.error('Error loading initial data:', error);
         showError('Failed to load data');
-    } finally {
-        this.hideLoading();
     }
+    // REMOVE this.hideLoading() from here - it's handled in init()
 }
-
+    
    async loadCustomers() {
     try {
         // Show skeleton loading for customers list
