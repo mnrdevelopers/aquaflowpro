@@ -12,6 +12,7 @@ class PWAHandler {
         this.checkStandaloneMode();
         // New: Check specifically for iOS
         this.checkIOS();
+        this.checkForUpdates();
     }
 
     // Register Service Worker
@@ -37,6 +38,17 @@ class PWAHandler {
             }
         }
     }
+
+    async checkForUpdates() {
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            registration.update(); // Force update check
+        } catch (error) {
+            console.log('Update check failed:', error);
+        }
+    }
+}
 
     // Handle install prompt (Android/Desktop)
     setupInstallPrompt() {
