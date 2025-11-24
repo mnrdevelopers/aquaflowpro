@@ -38,12 +38,8 @@ class AquaFlowApp {
  async init() {
     console.log('App initialization started');
     
-    // Show loading immediately - BUT only if not already showing
-    if (!document.getElementById('loadingOverlay').classList.contains('hidden')) {
-        this.showLoading();
-    } else {
-        this.showLoading();
-    }
+    // Show loading only once
+    this.showLoading();
     
     await this.waitForAuthState();
     
@@ -60,7 +56,7 @@ class AquaFlowApp {
     this.updateUI();
     console.log('App initialization completed successfully');
     
-    // Hide loading when everything is ready - ensure it only hides once
+    // Hide loading when everything is ready
     this.hideLoading();
 }
 
