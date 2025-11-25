@@ -317,31 +317,45 @@ class AuthManager {
     }
 
   handleAuthError(error) {
-        let message = 'An error occurred. Please try again.';
+        let message = 'An unknown error occurred. Please try again.';
         
+        // Detailed Firebase Auth Error Handling
         switch (error.code) {
             case 'auth/email-already-in-use':
-                message = 'This email is already registered. Please sign in instead.';
+                message = 'This email is already registered. Please sign in instead.'; // Primarily for signup
                 break;
             case 'auth/invalid-email':
                 message = 'Please enter a valid email address.';
                 break;
             case 'auth/weak-password':
-                message = 'Password should be at least 6 characters long.';
+                message = 'Password should be at least 6 characters long.'; // Primarily for signup
                 break;
+            
+            // --- LOGIN SPECIFIC ERRORS ---
             case 'auth/user-not-found':
-                message = 'No account found with this email. Please sign up first.';
+                // Specific message for unregistered user trying to log in
+                message = 'Email not registered. Please sign up to create an account.';
                 break;
             case 'auth/wrong-password':
+                // Specific message for correct email but incorrect password
                 message = 'Incorrect password. Please try again.';
                 break;
+            case 'auth/invalid-credential':
+                 // Modern Firebase error for combined bad email/password on login
+                 message = 'Invalid credentials. Please check your email and password.';
+                 break;
+            // --- END LOGIN SPECIFIC ERRORS ---
+            
             case 'auth/network-request-failed':
                 message = 'Network error. Please check your internet connection.';
                 break;
+            case 'auth/requires-recent-login':
+                message = 'Please sign out and sign back in to perform this action.';
+                break;
             default:
-                if (error.message && (error.message.includes('Firestore') || error.message.includes('verification'))) {
-                    message = error.message;
-                }
+                // Fallback for unexpected errors
+                console.error('Unhandled Auth Error:', error.message);
+                message = `Authentication failed: ${error.message.split('(')[0].trim() || 'Please try again.'}`;
                 break;
         }
         
