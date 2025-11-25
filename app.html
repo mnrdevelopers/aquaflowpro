@@ -39,9 +39,7 @@
                 </div>
             </div>
             <div class="header-right">
-                <button class="btn btn-icon" onclick="showView('deliveries')" title="Manage Deliveries">
-                    <i class="fas fa-truck"></i>
-                </button>
+                <!-- Removed 'Deliveries' button, now in More Menu -->
                 <button class="btn btn-icon" onclick="showNotifications()">
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge hidden" id="notificationCount">0</span>
@@ -103,6 +101,7 @@
             <div class="quick-actions-section">
                 <h3>Quick Actions</h3>
                 <div class="quick-actions-grid">
+                    <!-- Kept as quick actions, but redundant with bottom nav -->
                     <button class="quick-action-btn" onclick="showView('customers')">
                         <i class="fas fa-user-plus"></i>
                         Add Customer
@@ -653,7 +652,7 @@
         </div>
     </div>
 
-    <!-- NEW: Track Salary Modal (UPDATED - FIX APPLIED) -->
+    <!-- NEW: Track Salary Modal (FIX APPLIED) -->
     <div id="trackSalaryModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -871,8 +870,33 @@
             </div>
         </div>
     </div>
+    
+    <!-- NEW: More Options Modal (Hamburger Menu Content) -->
+    <div id="moreOptionsModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 300px;">
+            <div class="modal-header">
+                <h3>More Options</h3>
+                <button class="btn btn-close" onclick="closeModal('moreOptionsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="settings-content" style="padding: var(--space-lg);">
+                <div class="quick-actions-grid" style="grid-template-columns: 1fr;">
+                    <button class="quick-action-btn" onclick="closeModal('moreOptionsModal'); showView('deliveries');">
+                        <i class="fas fa-truck"></i>
+                        Delivery History
+                    </button>
+                    <button class="quick-action-btn" onclick="closeModal('moreOptionsModal'); showView('reports');">
+                        <i class="fas fa-chart-bar"></i>
+                        Business Reports
+                    </button>
+                    <!-- Add more secondary links here if needed -->
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <!-- Bottom Navigation -->
+    <!-- Bottom Navigation (REORGANIZED) -->
     <nav class="bottom-nav">
         <button class="nav-item" onclick="showView('dashboard')">
             <i class="fas fa-home"></i>
@@ -896,9 +920,15 @@
             <span>Staff</span>
         </button>
         
-        <button class="nav-item" onclick="showView('reports')">
-            <i class="fas fa-chart-bar"></i>
-            <span>Reports</span>
+        <button class="nav-item" onclick="showView('billing')">
+            <i class="fas fa-file-invoice"></i>
+            <span>Billing</span>
+        </button>
+        
+        <!-- NEW: More Menu Button -->
+        <button class="nav-item" onclick="showModal('moreOptionsModal')">
+            <i class="fas fa-bars"></i>
+            <span>More</span>
         </button>
     </nav>
 
