@@ -550,6 +550,17 @@
             </div>
             <div class="settings-content">
                 <form id="settingsForm" onsubmit="saveSettings(event)">
+                    
+                    <!-- New: User Account Section -->
+                    <div class="setting-section">
+                        <h4>User Account</h4>
+                        <div class="setting-item">
+                            <label>Logged-in Email</label>
+                            <input type="email" id="settingsUserEmail" class="form-input" readonly style="background-color: var(--gray-100); cursor: default;">
+                            <p class="text-sm text-muted" style="margin-top: 5px;">This is the email address used for login.</p>
+                        </div>
+                    </div>
+                    
                     <!-- Owner Only Settings -->
                     <div class="setting-section">
                         <h4>Business Information</h4>
