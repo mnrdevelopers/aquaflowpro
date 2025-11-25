@@ -7,6 +7,9 @@ class AquaFlowApp {
         this.filteredDeliveries = []; // For the delivery list view
         this.notifications = [];
         this.payments = []; 
+        this.staff = []; // NEW: Staff array
+        this.filteredStaff = []; // NEW: Filtered staff for display
+        this.salaryPayments = []; // NEW: Salary payments array
         this.currentView = 'dashboard';
         this.scannerActive = false;
         this.currentCustomerId = null;
@@ -22,6 +25,7 @@ class AquaFlowApp {
         this.currentPage = 1;
         this.itemsPerPage = 10;
         this.deliveryPage = 1; // Pagination for deliveries view
+        this.staffPage = 1; // NEW: Pagination for staff view
 
         this.init();
     }
@@ -116,6 +120,12 @@ class AquaFlowApp {
             searchInput.addEventListener('input', (e) => this.filterCustomers(e.target.value));
         }
 
+        // Staff search
+        const staffSearchInput = document.getElementById('staffSearch');
+        if (staffSearchInput) {
+            staffSearchInput.addEventListener('input', (e) => this.filterStaff(e.target.value));
+        }
+
         // Close modals on backdrop click
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
@@ -175,7 +185,8 @@ hideLoading() {
             this.loadCustomers(),
             this.loadCurrentMonthDeliveries(), 
             this.loadNotifications(),
-            this.loadPayments() 
+            this.loadPayments(),
+            this.loadStaff() // NEW
         ]);
         this.updateDashboard();
         console.log('App initialization complete.');
@@ -258,6 +269,400 @@ hideLoading() {
         showError('Failed to load customers'); 
     }
 }
+
+    // ==========================================
+    // NEW: STAFF MANAGEMENT (CRUD & Salary)
+    // ==========================================
+
+    async loadStaff() {
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            if (!this.userId) return;
+
+            // Load Staff Data
+            const staffSnapshot = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff')
+                .orderBy('name')
+                .get();
+            
+            this.staff = staffSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            this.filteredStaff = [...this.staff];
+
+            // Load Salary Payments (last 1 year for reporting/tracking)
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+            const paymentsSnapshot = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('salaryPayments')
+                // Note: Firestore recommends sorting by time to limit date range, but for simplicity/demo, we load and filter locally.
+                // For a large dataset, a proper indexed query would be needed.
+                .limit(500) 
+                .get();
+            
+            this.salaryPayments = paymentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            this.displayStaff();
+
+        } catch (error) {
+            console.error('Error loading staff data:', error);
+            showError('Failed to load staff list.');
+        }
+    }
+
+    displayStaff() {
+        const container = document.getElementById('staffList');
+        if (!container) return;
+
+        if (this.filteredStaff.length === 0) {
+             container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-user-tie"></i>
+                    <h3>No Staff Members</h3>
+                    <p>Add your employees to manage their details and salary.</p>
+                    <button class="btn btn-primary" onclick="showAddStaffModal()">
+                        <i class="fas fa-user-plus"></i> Add Staff Member
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const startIndex = (this.staffPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const pageStaff = this.filteredStaff.slice(startIndex, endIndex);
+        const totalPages = Math.ceil(this.filteredStaff.length / this.itemsPerPage);
+        const currentMonth = getCurrentMonth();
+
+        let html = `
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Salary</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        html += pageStaff.map(staff => {
+            const lastPayment = this.salaryPayments
+                .filter(p => p.staffId === staff.id)
+                .sort((a, b) => b.paidAt?.seconds - a.paidAt?.seconds)[0];
+            
+            const isPaidThisMonth = this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
+            const statusBadge = staff.status === 'active' 
+                ? `<span class="badge" style="background-color: var(--success); color: var(--white);">Active</span>` 
+                : `<span class="badge" style="background-color: var(--danger); color: var(--white);">Inactive</span>`;
+            
+            const salaryButton = isPaidThisMonth 
+                ? `<button class="btn btn-sm btn-success" disabled title="Salary Paid"><i class="fas fa-check"></i> Paid</button>`
+                : `<button class="btn btn-sm btn-warning" onclick="trackSalaryPayment('${staff.id}', '${staff.name}', ${staff.monthlySalary || 0})" title="Record Salary Payment"><i class="fas fa-rupee-sign"></i> Pay</button>`;
+
+            return `
+                <tr>
+                    <td class="fw-bold">${staff.name}</td>
+                    <td>${staff.role || 'N/A'}</td>
+                    <td class="fw-bold text-success">${formatCurrency(staff.monthlySalary || 0)}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <div class="action-buttons-row">
+                            ${salaryButton}
+                            <button class="btn btn-sm btn-outline" onclick="editStaff('${staff.id}')" title="Edit Staff">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="confirmDeleteStaff('${staff.id}', '${staff.name}')" title="Delete Staff">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+         if (totalPages > 0) {
+            html += `
+                <div class="pagination-controls">
+                    <button class="btn btn-sm btn-secondary" ${this.staffPage === 1 ? 'disabled' : ''} onclick="app.changeStaffPage(-1)">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </button>
+                    <span class="page-info">Page ${this.staffPage} of ${totalPages}</span>
+                    <button class="btn btn-sm btn-secondary" ${this.staffPage >= totalPages ? 'disabled' : ''} onclick="app.changeStaffPage(1)">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    changeStaffPage(delta) {
+        const totalPages = Math.ceil(this.filteredStaff.length / this.itemsPerPage);
+        const newPage = this.staffPage + delta;
+        
+        if (newPage >= 1 && newPage <= totalPages) {
+            this.staffPage = newPage;
+            this.displayStaff();
+            document.getElementById('staffView').scrollTop = 0;
+        }
+    }
+
+    filterStaff(searchTerm) {
+        if (!searchTerm) {
+            this.filteredStaff = [...this.staff];
+        } else {
+            const lower = searchTerm.toLowerCase();
+            this.filteredStaff = this.staff.filter(staff =>
+                staff.name.toLowerCase().includes(lower) ||
+                staff.phone.includes(searchTerm) ||
+                staff.role.toLowerCase().includes(lower)
+            );
+        }
+        this.staffPage = 1;
+        this.displayStaff();
+    }
+
+    async addStaff(e) {
+        e.preventDefault();
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        const staffData = {
+            name: document.getElementById('staffName').value,
+            phone: document.getElementById('staffPhone').value,
+            role: document.getElementById('staffRole').value,
+            monthlySalary: parseInt(document.getElementById('monthlySalary').value) || 0,
+            joinDate: firebase.firestore.FieldValue.serverTimestamp(),
+            status: 'active',
+            createdBy: this.authUserId
+        };
+        
+        if (!this.userId) {
+            showError('Authentication failed. Please sign in again.');
+            return;
+        }
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        if (submitBtn.disabled) return; 
+
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
+        try {
+            const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff').add(staffData);
+            staffData.id = docRef.id;
+            
+            this.staff.push(staffData);
+            this.filteredStaff.push(staffData); 
+
+            await this.addNotification('New Staff Added', `Added staff member: ${staffData.name}`, 'info');
+
+            e.target.reset();
+            this.closeModal('addStaffModal');
+            
+            this.filterStaff(''); 
+            this.displayStaff();
+            this.updateDashboard();
+            
+            showSuccess('Staff member added successfully!');
+            
+        } catch (error) {
+            console.error('Error adding staff:', error);
+            showError('Failed to add staff member');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    }
+
+    editStaff(staffId) {
+        const staff = this.staff.find(s => s.id === staffId);
+        if (!staff) {
+            showError('Staff member not found');
+            return;
+        }
+
+        document.getElementById('editStaffId').value = staff.id;
+        document.getElementById('editStaffName').value = staff.name;
+        document.getElementById('editStaffPhone').value = staff.phone;
+        document.getElementById('editStaffRole').value = staff.role || 'Delivery Driver';
+        document.getElementById('editMonthlySalary').value = staff.monthlySalary || 0;
+        document.getElementById('editStaffStatus').value = staff.status || 'active';
+
+        this.showModal('editStaffModal');
+    }
+
+    async updateStaff(e) {
+        e.preventDefault();
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const staffId = document.getElementById('editStaffId').value;
+
+        const staffData = {
+            name: document.getElementById('editStaffName').value,
+            phone: document.getElementById('editStaffPhone').value,
+            role: document.getElementById('editStaffRole').value,
+            monthlySalary: parseInt(document.getElementById('editMonthlySalary').value) || 0,
+            status: document.getElementById('editStaffStatus').value,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        if (submitBtn.disabled) return; 
+
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+
+        try {
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff').doc(staffId).update(staffData);
+            
+            const staffIndex = this.staff.findIndex(s => s.id === staffId);
+            if (staffIndex !== -1) {
+                this.staff[staffIndex] = { ...this.staff[staffIndex], ...staffData };
+            }
+
+            this.filterStaff(document.getElementById('staffSearch')?.value || ''); 
+            this.displayStaff();
+            
+            await this.addNotification('Staff Updated', `Updated staff member: ${staffData.name}`, 'info');
+            this.closeModal('editStaffModal');
+            showSuccess('Staff member updated successfully!');
+            
+        } catch (error) {
+            console.error('Error updating staff:', error);
+            showError('Failed to update staff member');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    }
+
+    async deleteStaff(staffId) {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        try {
+            const staff = this.staff.find(s => s.id === staffId);
+            if (!staff) {
+                showError('Staff member not found');
+                return;
+            }
+
+            // Delete staff document
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff').doc(staffId).delete();
+
+            // Note: In a real app, we'd batch-delete all associated salary payments here too.
+            // For this version, we will leave the payments for historical reporting.
+
+            this.staff = this.staff.filter(s => s.id !== staffId);
+            this.filteredStaff = this.filteredStaff.filter(s => s.id !== staffId);
+
+            await this.addNotification('Staff Deleted', `Deleted staff member: ${staff.name}`, 'warning');
+
+            this.displayStaff();
+            this.closeModal('deleteConfirmStaffModal');
+            
+            showSuccess('Staff member deleted successfully!');
+            
+        } catch (error) {
+            console.error('Error deleting staff:', error);
+            showError('Failed to delete staff member');
+        }
+    }
+    
+    showConfirmDeleteStaff(staffId, staffName) {
+        document.getElementById('staffToDeleteId').value = staffId;
+        document.getElementById('deleteStaffName').textContent = staffName;
+        this.showModal('deleteConfirmStaffModal');
+    }
+
+    showTrackSalaryModal(staffId, staffName, monthlySalary) {
+        const currentMonth = getCurrentMonth();
+        document.getElementById('trackStaffId').value = staffId;
+        document.getElementById('trackStaffName').value = staffName;
+        document.getElementById('trackSalaryMonth').value = currentMonth;
+        document.getElementById('trackSalaryAmount').value = monthlySalary;
+        this.showModal('trackSalaryModal');
+    }
+
+    async trackSalaryPayment(e) {
+        e.preventDefault();
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        const staffId = document.getElementById('trackStaffId').value;
+        const staffName = document.getElementById('trackStaffName').value;
+        const month = document.getElementById('trackSalaryMonth').value;
+        const amount = parseInt(document.getElementById('trackSalaryAmount').value) || 0;
+        
+        if (amount <= 0) {
+            showError('Invalid salary amount.');
+            return;
+        }
+
+        // Check if already paid for this month
+        const alreadyPaid = this.salaryPayments.some(p => 
+            p.staffId === staffId && p.month === month
+        );
+
+        if (alreadyPaid) {
+            showError(`Salary for ${staffName} has already been recorded for ${month}.`);
+            return;
+        }
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Recording...';
+
+        try {
+            const paymentData = {
+                staffId,
+                staffName,
+                month,
+                amount,
+                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+                recordedBy: this.authUserId
+            };
+
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('salaryPayments').add(paymentData);
+            
+            // Update local state
+            this.salaryPayments.unshift(paymentData); 
+            
+            // Update the staff member's last payment date for reference
+            await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff').doc(staffId).update({
+                lastSalaryPayment: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            await this.addNotification('Salary Paid', `Paid ${staffName} ${formatCurrency(amount)} for ${month}`, 'success');
+            
+            this.closeModal('trackSalaryModal');
+            this.displayStaff();
+            this.generateReports(); // Refresh reports
+            showSuccess(`Salary payment recorded for ${staffName}!`);
+            
+        } catch (error) {
+            console.error('Error recording salary payment:', error);
+            showError('Failed to record salary payment');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    }
+
+    // ==========================================
+    // END STAFF MANAGEMENT
+    // ==========================================
 
     async loadCurrentMonthDeliveries() {
         try {
@@ -357,8 +762,11 @@ hideLoading() {
     }
 
     async clearAllNotifications() {
-        if (!confirm('Are you sure you want to clear all notifications?')) return;
-
+        // Use a modal instead of confirm()
+        this.showModal('clearNotificationsConfirmModal');
+    }
+    
+    async confirmClearAllNotifications() {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             if (!this.userId) return;
@@ -373,6 +781,7 @@ hideLoading() {
 
             await batch.commit();
             await this.loadNotifications();
+            this.closeModal('clearNotificationsConfirmModal');
             showSuccess('All notifications cleared');
         } catch (error) {
             console.error('Error clearing notifications:', error);
@@ -640,6 +1049,8 @@ hideLoading() {
     }
 
     async confirmDeleteDelivery() {
+        // Replacing `confirm()` with a modal/better UI is recommended.
+        // For now, retaining a simple check before proceeding with the action.
         if(!confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
         
         const deliveryId = document.getElementById('editDeliveryId').value;
@@ -1511,6 +1922,11 @@ hideLoading() {
             this.deliveryPage = 1;
             this.displayDeliveries();
         }
+        if (viewName === 'staff') { // NEW
+            this.filteredStaff = [...this.staff];
+            this.staffPage = 1;
+            this.displayStaff();
+        }
     }
 
     // Dashboard Functions
@@ -1765,6 +2181,7 @@ ${businessName}`;
     }
 
     async markBillPaid(customerId, month, amount) {
+        // Replacing `confirm()` with a modal/better UI is recommended.
         if (!confirm(`Mark bill as paid for ${month}? Amount: ${formatCurrency(amount)}`)) return;
 
         try {
@@ -1797,9 +2214,11 @@ ${businessName}`;
     generateReports() {
         const monthlyReport = document.getElementById('monthlyReport');
         const topCustomersReport = document.getElementById('topCustomersReport');
+        const staffSalaryReport = document.getElementById('staffSalaryReport'); // NEW
         
-        if (!monthlyReport || !topCustomersReport) return;
+        if (!monthlyReport || !topCustomersReport || !staffSalaryReport) return; // Update check
 
+        // 1. Monthly Performance
         const currentMonth = getCurrentMonth();
         const monthlyDeliveries = this.deliveries.filter(d => d.month === currentMonth);
         const totalMonthlyCans = monthlyDeliveries.reduce((sum, d) => sum + (d.quantity || 1), 0);
@@ -1828,7 +2247,8 @@ ${businessName}`;
                 </div>
             </div>
         `;
-
+        
+        // 2. Top Customers
         const sortedCustomers = [...this.customers]
             .sort((a, b) => (b.totalCans || 0) - (a.totalCans || 0))
             .slice(0, 5);
@@ -1855,6 +2275,39 @@ ${businessName}`;
                 </div>
             `;
         }
+
+        // 3. NEW: Staff Salary Report
+        const monthlyStaffPayments = this.salaryPayments.filter(p => p.month === currentMonth);
+        const totalMonthlySalaryPaid = monthlyStaffPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        
+        // List staff who haven't been paid this month
+        const unpaidStaff = this.staff.filter(staff => 
+            staff.status === 'active' && 
+            !monthlyStaffPayments.some(p => p.staffId === staff.id)
+        );
+        
+        staffSalaryReport.innerHTML = `
+             <div style="text-align: center; width: 100%;">
+                <div style="font-size: 1.8rem; font-weight: bold; color: var(--danger);">${formatCurrency(totalMonthlySalaryPaid)}</div>
+                <div style="color: var(--gray-600); margin-bottom: 1rem;">Salary Paid This Month (${currentMonth})</div>
+                
+                <div style="text-align: left; margin-top: 1.5rem;">
+                    <h5 style="font-size: 1rem; color: var(--primary-dark); margin-bottom: 0.5rem;">Unpaid Staff (${unpaidStaff.length})</h5>
+                    <div style="background: var(--gray-100); padding: 1rem; border-radius: 8px;">
+                        ${unpaidStaff.length > 0 ? 
+                            unpaidStaff.map(staff => `
+                                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.2rem 0; border-bottom: 1px dashed var(--gray-200);">
+                                    <span>${staff.name}</span>
+                                    <span class="text-danger">${formatCurrency(staff.monthlySalary || 0)}</span>
+                                </div>
+                            `).join('')
+                            : '<p style="font-size: 0.9rem; color: var(--success);">All active staff paid.</p>'
+                        }
+                        <button class="btn btn-sm btn-secondary" onclick="showView('staff')" style="margin-top: 1rem;">Manage Staff</button>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     async saveSettings(e) {
@@ -1997,6 +2450,10 @@ function showAddCustomerModal() {
     if (app) app.showModal('addCustomerModal');
 }
 
+function showAddStaffModal() {
+    if (app) app.showModal('addStaffModal');
+}
+
 function closeModal(modalId) {
     if (app) app.closeModal(modalId);
 }
@@ -2084,6 +2541,7 @@ function processManualQR() {
 }
 
 function quickDelivery(customerId) {
+    // Replacing `prompt()` with a modal/better UI is recommended.
     const quantity = parseInt(prompt('Enter number of cans:', '1')) || 1;
     if (quantity > 0 && app) {
         const customer = app.customers.find(c => c.id === customerId);
@@ -2179,6 +2637,10 @@ async function clearAllNotifications() {
     app.clearAllNotifications();
 }
 
+function confirmClearAllNotifications() { // NEW helper for modal
+    if (app) app.confirmClearAllNotifications();
+}
+
 function showAllDeliveries() {
     showError('All deliveries view coming soon!');
 }
@@ -2199,9 +2661,41 @@ function addCustomer(e) {
     if (app) app.addCustomer(e);
 }
 
+function trackSalaryPayment(staffId, staffName, monthlySalary) {
+    if (app) app.showTrackSalaryModal(staffId, staffName, monthlySalary);
+}
+
+function recordSalaryPayment(e) {
+    if (app) app.trackSalaryPayment(e);
+}
+
+function editStaff(staffId) {
+    if (app) app.editStaff(staffId);
+}
+
+function updateStaff(e) {
+    if (app) app.updateStaff(e);
+}
+
+function addStaff(e) {
+    if (app) app.addStaff(e);
+}
+
+function confirmDeleteStaff(staffId, staffName) {
+    if (app) app.showConfirmDeleteStaff(staffId, staffName);
+}
+
+function deleteStaffConfirmed() {
+    const staffId = document.getElementById('staffToDeleteId').value;
+    if (staffId && app) {
+        app.deleteStaff(staffId);
+    }
+}
+
 function copyBusinessId() {
     const input = document.getElementById('settingsBusinessId');
     input.select();
     document.execCommand('copy');
     showSuccess('Business ID copied to clipboard!');
+    }
 }
