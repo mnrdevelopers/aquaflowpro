@@ -525,7 +525,7 @@
         </div>
     </div>
     
-    <!-- NEW: Add Staff Modal -->
+    <!-- NEW: Add Staff Modal (UPDATED) -->
     <div id="addStaffModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -552,10 +552,27 @@
                         <option value="Other">Other</option>
                     </select>
                 </div>
+                
                 <div class="form-group">
+                    <label for="staffSalaryType">Salary Frequency</label>
+                    <select id="staffSalaryType" class="form-input">
+                        <option value="monthly">Monthly</option>
+                        <option value="daily">Daily</option>
+                    </select>
+                </div>
+                
+                <!-- Monthly Salary (Default) -->
+                <div class="form-group" id="monthlySalaryGroup">
                     <label for="monthlySalary">Monthly Salary (₹) *</label>
                     <input type="number" id="monthlySalary" class="form-input" min="0" value="0" required>
                 </div>
+                
+                <!-- Daily Salary (Hidden by Default) -->
+                <div class="form-group hidden" id="dailySalaryGroup">
+                    <label for="dailySalary">Daily Wage (₹) *</label>
+                    <input type="number" id="dailySalary" class="form-input" min="0" value="0" required>
+                </div>
+
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('addStaffModal')">
                         Cancel
@@ -568,7 +585,7 @@
         </div>
     </div>
 
-    <!-- NEW: Edit Staff Modal -->
+    <!-- NEW: Edit Staff Modal (UPDATED) -->
     <div id="editStaffModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -596,10 +613,27 @@
                         <option value="Other">Other</option>
                     </select>
                 </div>
+                
                 <div class="form-group">
+                    <label for="editStaffSalaryType">Salary Frequency</label>
+                    <select id="editStaffSalaryType" class="form-input">
+                        <option value="monthly">Monthly</option>
+                        <option value="daily">Daily</option>
+                    </select>
+                </div>
+                
+                <!-- Monthly Salary (Default) -->
+                <div class="form-group" id="editMonthlySalaryGroup">
                     <label for="editMonthlySalary">Monthly Salary (₹)</label>
                     <input type="number" id="editMonthlySalary" class="form-input" min="0">
                 </div>
+                
+                <!-- Daily Salary (Hidden by Default) -->
+                <div class="form-group hidden" id="editDailySalaryGroup">
+                    <label for="editDailySalary">Daily Wage (₹)</label>
+                    <input type="number" id="editDailySalary" class="form-input" min="0">
+                </div>
+
                 <div class="form-group">
                     <label for="editStaffStatus">Status</label>
                     <select id="editStaffStatus" class="form-input">
@@ -619,7 +653,7 @@
         </div>
     </div>
 
-    <!-- NEW: Track Salary Modal -->
+    <!-- NEW: Track Salary Modal (UPDATED) -->
     <div id="trackSalaryModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -630,6 +664,7 @@
             </div>
             <form id="trackSalaryForm" onsubmit="recordSalaryPayment(event)">
                 <input type="hidden" id="trackStaffId">
+                <input type="hidden" id="trackSalaryTypeHidden">
                 
                 <div class="form-group">
                     <label>Staff Member</label>
@@ -637,21 +672,21 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="trackSalaryMonth">Payment Month</label>
+                    <label for="trackSalaryMonth">Payment Month (for record)</label>
                     <input type="month" id="trackSalaryMonth" class="form-input" required>
                 </div>
 
                 <div class="form-group">
                     <label for="trackSalaryAmount">Amount Paid (₹)</label>
                     <input type="number" id="trackSalaryAmount" class="form-input" min="1" required>
-                    <p class="text-sm text-muted" style="margin-top: 5px;">This should be the net amount paid to the staff member.</p>
+                    <p class="text-sm text-muted" id="trackSalaryAmountNote" style="margin-top: 5px;">This should be the full salary amount paid to the staff member.</p>
                 </div>
                 
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('trackSalaryModal')">
                         Cancel
                     </button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" id="recordPaymentBtn">
                         <i class="fas fa-check"></i> Confirm Payment
                     </button>
                 </div>
