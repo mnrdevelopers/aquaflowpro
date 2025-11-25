@@ -301,12 +301,13 @@ hideLoading() {
     // ==========================================
 
     getStaffSalaryDisplay(staff) {
-        const amount = staff.monthlySalary || staff.dailySalary || 0;
+        // Use the appropriate salary field based on type
+        const amount = staff.salaryType === 'monthly' ? staff.monthlySalary : staff.dailySalary;
         const type = staff.salaryType === 'daily' ? '/day' : '/month';
         return {
-            amount: formatCurrency(amount),
+            amount: formatCurrency(amount || 0),
             type: type,
-            rawAmount: amount
+            rawAmount: amount || 0
         };
     }
 
@@ -396,7 +397,7 @@ hideLoading() {
             const isPaidThisMonth = staff.salaryType === 'monthly' && this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
 
             // Check for daily payment status (less practical without dates, but we check if *any* payment was made this month)
-            const hasPaymentsThisMonth = staff.salaryType === 'daily' && this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
+            // const hasPaymentsThisMonth = staff.salaryType === 'daily' && this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
             
             // Determine which action button to show
             let salaryButton;
@@ -647,10 +648,14 @@ hideLoading() {
 
             this.staff = this.staff.filter(s => s.id !== staffId);
             this.filteredStaff = this.filteredStaff.filter(s => s.id !== staffId);
+            
+            // NEW: Filter out salary payments for the deleted staff from local state
+            this.salaryPayments = this.salaryPayments.filter(p => p.staffId !== staffId);
 
             await this.addNotification('Staff Deleted', `Deleted staff member: ${staff.name}`, 'warning');
 
             this.displayStaff();
+            this.generateReports(); // Refresh reports after filtering payments
             this.closeModal('deleteConfirmStaffModal');
             
             showSuccess('Staff member deleted successfully!');
@@ -668,25 +673,33 @@ hideLoading() {
     }
 
     showTrackSalaryModal(staffId, staffName, monthlyOrDailySalary, salaryType) { // UPDATED signature
+        const today = new Date().toISOString().substring(0, 10);
         const currentMonth = getCurrentMonth();
+        
         document.getElementById('trackStaffId').value = staffId;
         document.getElementById('trackStaffName').value = staffName;
-        document.getElementById('trackSalaryMonth').value = currentMonth;
         document.getElementById('trackSalaryAmount').value = monthlyOrDailySalary;
+        document.getElementById('trackSalaryTypeHidden').value = salaryType; // Store type for processing
         
-        // NEW: Update label and input description based on salary type
+        const monthlyGroup = document.getElementById('trackMonthlyGroup');
+        const dailyGroup = document.getElementById('trackDailyGroup');
         const amountLabel = document.querySelector('#trackSalaryForm label[for="trackSalaryAmount"]');
         const amountNote = document.getElementById('trackSalaryAmountNote');
         
         if (salaryType === 'monthly') {
+            monthlyGroup.classList.remove('hidden');
+            dailyGroup.classList.add('hidden');
+            document.getElementById('trackSalaryMonth').value = currentMonth;
             amountLabel.textContent = 'Monthly Amount Paid (₹)';
             amountNote.textContent = 'This should be the full monthly salary amount paid to the staff member.';
         } else {
+            monthlyGroup.classList.add('hidden');
+            dailyGroup.classList.remove('hidden');
+            document.getElementById('trackSalaryDate').value = today;
             amountLabel.textContent = 'Daily Amount Paid (₹)';
             amountNote.textContent = 'This should be the amount paid for a single day of work.';
         }
         
-        document.getElementById('trackSalaryTypeHidden').value = salaryType; // Store type for processing
         document.getElementById('recordPaymentBtn').innerHTML = `<i class="fas fa-check"></i> Confirm Payment`;
 
         this.showModal('trackSalaryModal');
@@ -699,19 +712,35 @@ hideLoading() {
 
         const staffId = document.getElementById('trackStaffId').value;
         const staffName = document.getElementById('trackStaffName').value;
-        const month = document.getElementById('trackSalaryMonth').value;
         const amount = parseInt(document.getElementById('trackSalaryAmount').value) || 0;
         const salaryType = document.getElementById('trackSalaryTypeHidden').value; // NEW
+        
+        let month, paymentDate; // Separate variables for monthly/daily tracking
+        
+        if (salaryType === 'monthly') {
+            month = document.getElementById('trackSalaryMonth').value;
+            if (!month) {
+                showError('Please select a payment month.');
+                return;
+            }
+        } else {
+            paymentDate = document.getElementById('trackSalaryDate').value;
+            if (!paymentDate) {
+                showError('Please select a payment date.');
+                return;
+            }
+            month = paymentDate.substring(0, 7); // YYYY-MM format for aggregation
+        }
         
         if (amount <= 0) {
             showError('Invalid salary amount.');
             return;
         }
 
-        // Check if MONTHLY already paid for this month
+        // Check for MONTHLY duplicate payment (Only relevant for monthly type)
         if (salaryType === 'monthly') {
             const alreadyPaid = this.salaryPayments.some(p => 
-                p.staffId === staffId && p.month === month
+                p.staffId === staffId && p.month === month && p.salaryType === 'monthly'
             );
 
             if (alreadyPaid) {
@@ -720,7 +749,22 @@ hideLoading() {
             }
         }
         
-        // Daily salary can be paid multiple times per month, so no block needed.
+        // Check for DAILY duplicate payment (Preventing multiple daily payments on the *exact* same date)
+        if (salaryType === 'daily') {
+            const alreadyPaidToday = this.salaryPayments.some(p => {
+                const pDate = p.paidAt && p.paidAt.toDate ? p.paidAt.toDate().toISOString().substring(0, 10) : '';
+                return p.staffId === staffId && pDate === paymentDate && p.salaryType === 'daily';
+            });
+            
+            if (alreadyPaidToday) {
+                 if (!confirm('A payment was already recorded for this staff member today. Do you want to record another?')) {
+                     const submitBtn = e.target.querySelector('button[type="submit"]');
+                     submitBtn.disabled = false;
+                     submitBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Payment';
+                     return;
+                 }
+            }
+        }
 
         const submitBtn = e.target.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;
@@ -734,6 +778,7 @@ hideLoading() {
                 month,
                 amount,
                 salaryType, // NEW
+                date: paymentDate || null, // NEW: Store date for daily tracking
                 paidAt: firebase.firestore.FieldValue.serverTimestamp(),
                 recordedBy: this.authUserId
             };
@@ -750,7 +795,7 @@ hideLoading() {
             
             const message = salaryType === 'monthly' 
                 ? `Paid monthly salary of ${formatCurrency(amount)} to ${staffName}`
-                : `Paid daily wages of ${formatCurrency(amount)} to ${staffName}`;
+                : `Paid daily wages of ${formatCurrency(amount)} to ${staffName} for ${paymentDate}`;
 
             await this.addNotification('Salary Paid', message, 'success');
             
