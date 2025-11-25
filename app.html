@@ -653,7 +653,7 @@
         </div>
     </div>
 
-    <!-- NEW: Track Salary Modal (UPDATED) -->
+    <!-- NEW: Track Salary Modal (UPDATED - FIX APPLIED) -->
     <div id="trackSalaryModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -671,16 +671,17 @@
                     <input type="text" id="trackStaffName" class="form-input" readonly style="background-color: var(--gray-100);">
                 </div>
                 
-                <!-- NEW: Conditional Payment Date/Month Group -->
-               <div class="form-group" id="trackMonthlyGroup">
-    <label for="trackSalaryMonth">Payment Month</label>
-    <input type="month" id="trackSalaryMonth" class="form-input">
-</div>
-
-<div class="form-group hidden" id="trackDailyGroup">
-    <label for="trackSalaryDate">Payment Date</label>
-    <input type="date" id="trackSalaryDate" class="form-input">
-</div>
+                <!-- FIXED: Removed 'required' attribute to fix unfocusable element warning -->
+                <div class="form-group" id="trackMonthlyGroup">
+                    <label for="trackSalaryMonth">Payment Month</label>
+                    <input type="month" id="trackSalaryMonth" class="form-input">
+                </div>
+                
+                <!-- FIXED: Removed 'required' attribute to fix unfocusable element warning -->
+                <div class="form-group hidden" id="trackDailyGroup">
+                    <label for="trackSalaryDate">Payment Date</label>
+                    <input type="date" id="trackSalaryDate" class="form-input">
+                </div>
 
                 <div class="form-group">
                     <label for="trackSalaryAmount">Amount Paid (₹)</label>
