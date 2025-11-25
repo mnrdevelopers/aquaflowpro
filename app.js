@@ -2697,5 +2697,4 @@ function copyBusinessId() {
     input.select();
     document.execCommand('copy');
     showSuccess('Business ID copied to clipboard!');
-    }
 }
