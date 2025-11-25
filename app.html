@@ -671,9 +671,15 @@
                     <input type="text" id="trackStaffName" class="form-input" readonly style="background-color: var(--gray-100);">
                 </div>
                 
-                <div class="form-group">
-                    <label for="trackSalaryMonth">Payment Month (for record)</label>
+                <!-- NEW: Conditional Payment Date/Month Group -->
+                <div class="form-group" id="trackMonthlyGroup">
+                    <label for="trackSalaryMonth">Payment Month</label>
                     <input type="month" id="trackSalaryMonth" class="form-input" required>
+                </div>
+                
+                <div class="form-group hidden" id="trackDailyGroup">
+                    <label for="trackSalaryDate">Payment Date</label>
+                    <input type="date" id="trackSalaryDate" class="form-input" required>
                 </div>
 
                 <div class="form-group">
