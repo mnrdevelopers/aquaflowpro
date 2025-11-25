@@ -337,7 +337,6 @@ hideLoading() {
 
             const paymentsSnapshot = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('salaryPayments')
                 // Note: Firestore recommends sorting by time to limit date range, but for simplicity/demo, we load and filter locally.
-                // For a large dataset, a proper indexed query would be needed.
                 .limit(500) 
                 .get();
             
@@ -396,9 +395,6 @@ hideLoading() {
             // Check for monthly payment status
             const isPaidThisMonth = staff.salaryType === 'monthly' && this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
 
-            // Check for daily payment status (less practical without dates, but we check if *any* payment was made this month)
-            // const hasPaymentsThisMonth = staff.salaryType === 'daily' && this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
-            
             // Determine which action button to show
             let salaryButton;
             if (staff.salaryType === 'monthly') {
@@ -649,7 +645,7 @@ hideLoading() {
             this.staff = this.staff.filter(s => s.id !== staffId);
             this.filteredStaff = this.filteredStaff.filter(s => s.id !== staffId);
             
-            // NEW: Filter out salary payments for the deleted staff from local state
+            // NEW FIX: Filter out salary payments for the deleted staff from local state
             this.salaryPayments = this.salaryPayments.filter(p => p.staffId !== staffId);
 
             await this.addNotification('Staff Deleted', `Deleted staff member: ${staff.name}`, 'warning');
@@ -693,9 +689,10 @@ hideLoading() {
             amountLabel.textContent = 'Monthly Amount Paid (₹)';
             amountNote.textContent = 'This should be the full monthly salary amount paid to the staff member.';
         } else {
+            // NEW: Show daily date picker and hide month picker
             monthlyGroup.classList.add('hidden');
             dailyGroup.classList.remove('hidden');
-            document.getElementById('trackSalaryDate').value = today;
+            document.getElementById('trackSalaryDate').value = today; // Set today's date default
             amountLabel.textContent = 'Daily Amount Paid (₹)';
             amountNote.textContent = 'This should be the amount paid for a single day of work.';
         }
@@ -752,12 +749,13 @@ hideLoading() {
         // Check for DAILY duplicate payment (Preventing multiple daily payments on the *exact* same date)
         if (salaryType === 'daily') {
             const alreadyPaidToday = this.salaryPayments.some(p => {
-                const pDate = p.paidAt && p.paidAt.toDate ? p.paidAt.toDate().toISOString().substring(0, 10) : '';
-                return p.staffId === staffId && pDate === paymentDate && p.salaryType === 'daily';
+                // Check against the 'date' field saved in payment data
+                return p.staffId === staffId && p.date === paymentDate && p.salaryType === 'daily';
             });
             
             if (alreadyPaidToday) {
-                 if (!confirm('A payment was already recorded for this staff member today. Do you want to record another?')) {
+                 // Use custom UI for confirmation if possible, but fall back to browser confirm for now
+                 if (!confirm(`A payment was already recorded for ${staffName} on ${paymentDate}. Do you want to record another payment for this day?`)) {
                      const submitBtn = e.target.querySelector('button[type="submit"]');
                      submitBtn.disabled = false;
                      submitBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Payment';
@@ -1659,6 +1657,18 @@ hideLoading() {
         }
         
         const businessName = this.userData?.businessName || 'AquaFlow Pro';
+        const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+        // Generate 31 day grid HTML
+        let dayCells = '';
+        for (let i = 1; i <= 31; i++) {
+            dayCells += `
+                <div class="day-cell">
+                    <span class="day-number">${i}</span>
+                    <i class="fas fa-check check-icon"></i>
+                </div>
+            `;
+        }
         
         qrWindow.document.write(`
             <html>
@@ -1703,11 +1713,11 @@ hideLoading() {
                             margin-top: 4px;
                         }
                         .card-body {
-                            padding: 30px 20px;
+                            padding: 20px;
                         }
                         .qr-image {
-                            width: 220px;
-                            height: 220px;
+                            width: 180px;
+                            height: 180px;
                             object-fit: contain;
                             border: 2px solid #f3f4f6;
                             border-radius: 12px;
@@ -1735,6 +1745,66 @@ hideLoading() {
                             letter-spacing: 1px;
                             font-weight: 600;
                         }
+                        
+                        /* NEW STYLES FOR CALENDAR GRID */
+                        .delivery-tracker {
+                            margin-top: 25px;
+                            padding: 15px;
+                            background: #f9f9f9;
+                            border-radius: 10px;
+                            border: 1px solid #e5e7eb;
+                        }
+                        .tracker-header {
+                            font-size: 1rem;
+                            font-weight: 700;
+                            color: var(--primary-dark);
+                            margin-bottom: 10px;
+                        }
+                        .calendar-grid {
+                            display: grid;
+                            /* 7 columns for 7 days, adjusted for print size */
+                            grid-template-columns: repeat(7, 1fr); 
+                            gap: 4px;
+                            max-width: 300px;
+                            margin: 0 auto;
+                        }
+                        .day-cell {
+                            background: white;
+                            border: 1px solid #ddd;
+                            border-radius: 4px;
+                            position: relative;
+                            aspect-ratio: 1 / 1; /* Make it square */
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            align-items: center;
+                            font-size: 0.7rem;
+                            color: #333;
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                        }
+                        .day-number {
+                            font-weight: 600;
+                        }
+                        .check-icon {
+                            position: absolute;
+                            bottom: 1px;
+                            right: 1px;
+                            font-size: 0.6em;
+                            color: #28a745; /* Success Green */
+                            opacity: 0.5; /* Light initial state */
+                            border: 1px solid #28a745;
+                            border-radius: 50%;
+                            background: white;
+                            padding: 1px;
+                            visibility: visible; /* Always visible for manual tick */
+                        }
+                        
+                        .print-instructions {
+                             margin-top: 15px;
+                             font-size: 0.8rem;
+                             color: #6b7280;
+                        }
+                        
                         .btn-print { 
                             background: #0066ff; 
                             color: white; 
@@ -1754,6 +1824,8 @@ hideLoading() {
                             body { background: white; padding: 0; justify-content: flex-start; margin-top: 20px; }
                             .card { box-shadow: none; border: 2px solid #e5e7eb; }
                             .btn-print { display: none; }
+                            /* Ensure icons are visible for print */
+                            .check-icon { opacity: 1; border-color: #ccc; color: transparent; } 
                         }
                     </style>
                 </head>
@@ -1773,8 +1845,17 @@ hideLoading() {
                             </div>
                             
                             <div class="scan-instruction">
-                                <svg style="width:16px;height:16px;vertical-align:middle;margin-right:4px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                                Scan to Record Delivery
+                                Scan this code using the app to record delivery.
+                            </div>
+                            
+                            <div class="delivery-tracker">
+                                <div class="tracker-header">Delivery Tracker (${currentMonthName})</div>
+                                <div class="calendar-grid">
+                                    ${dayCells}
+                                </div>
+                                <div class="print-instructions">
+                                    Manually tick the $\\checkmark$ box in the day cell for each delivery.
+                                </div>
                             </div>
                         </div>
                     </div>
