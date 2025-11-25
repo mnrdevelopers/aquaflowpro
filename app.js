@@ -1949,6 +1949,7 @@ ${businessName}`;
     }
 
     updateUI() {
+        // --- EXISTING UI UPDATES ---
         const businessNameElement = document.getElementById('businessName');
         if (businessNameElement && this.userData) {
             businessNameElement.textContent = this.userData.businessName;
@@ -1968,6 +1969,15 @@ ${businessName}`;
         if (settingsBusinessPhone && this.userData) {
             settingsBusinessPhone.value = this.userData.businessPhone || '';
         }
+
+        // --- NEW: Display Logged-in Email ---
+        const settingsUserEmail = document.getElementById('settingsUserEmail');
+        const currentUser = auth.currentUser;
+        
+        if (settingsUserEmail && currentUser) {
+            settingsUserEmail.value = currentUser.email || 'N/A';
+        }
+        // ---------------------------------
 
         this.showView(this.currentView);
     }
