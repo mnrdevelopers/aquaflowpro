@@ -716,12 +716,14 @@ hideLoading() {
         
         if (salaryType === 'monthly') {
             month = document.getElementById('trackSalaryMonth').value;
+            // Removed HTML 'required' but kept JS validation check
             if (!month) {
                 showError('Please select a payment month.');
                 return;
             }
         } else {
             paymentDate = document.getElementById('trackSalaryDate').value;
+            // Removed HTML 'required' but kept JS validation check
             if (!paymentDate) {
                 showError('Please select a payment date.');
                 return;
@@ -1534,8 +1536,6 @@ hideLoading() {
             this.loadCustomerSelect();
             this.updateDashboard();
             this.closeModal('deleteConfirmModal');
-            
-            showSuccess('Customer deleted successfully!');
             
         } catch (error) {
             console.error('Error deleting customer:', error);
