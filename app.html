@@ -107,13 +107,13 @@
                         <i class="fas fa-user-plus"></i>
                         Add Customer
                     </button>
+                    <button class="quick-action-btn" onclick="showView('staff')">
+                        <i class="fas fa-user-tie"></i>
+                        Manage Staff
+                    </button>
                     <button class="quick-action-btn" onclick="showView('billing')">
                         <i class="fas fa-file-invoice"></i>
                         Generate Bills
-                    </button>
-                    <button class="quick-action-btn" onclick="showView('customers')">
-                        <i class="fas fa-users"></i>
-                        View Customers
                     </button>
                     <button class="quick-action-btn" onclick="showView('reports')">
                         <i class="fas fa-chart-bar"></i>
@@ -183,6 +183,32 @@
             </div>
         </section>
 
+        <!-- NEW: Staff Management View -->
+        <section id="staffView" class="view">
+            <div class="view-header">
+                <button class="btn btn-back" onclick="showView('dashboard')">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Staff Management</h2>
+                <button class="btn btn-primary" onclick="showAddStaffModal()">
+                    <i class="fas fa-user-plus"></i> Add Staff
+                </button>
+            </div>
+
+            <!-- Staff Search -->
+            <div class="search-section">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="staffSearch" placeholder="Search staff by name or role..." oninput="app.filterStaff(this.value)">
+                </div>
+            </div>
+
+            <!-- Staff List -->
+            <div id="staffList" class="staff-list">
+                <!-- Staff table will be loaded here -->
+            </div>
+        </section>
+
         <!-- Billing View -->
         <section id="billingView" class="view">
             <div class="view-header">
@@ -233,6 +259,12 @@
                     </div>
                 </div>
                 <div class="report-card">
+                    <h4>Staff Salary Overview</h4>
+                    <div id="staffSalaryReport" class="report-content">
+                        <!-- Staff Salary report content (NEW) -->
+                    </div>
+                </div>
+                <div class="report-card">
                     <h4>Top Customers</h4>
                     <div id="topCustomersReport" class="report-content">
                         <!-- Top customers list -->
@@ -259,7 +291,7 @@
         </section>
     </main>
 
-    <!-- Add this in app.html after the main content and before the modals -->
+    <!-- Loading Overlay -->
 <div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loader-container">
         <div class="loader"></div>
@@ -469,7 +501,7 @@
         </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
+    <!-- Delete Customer Confirmation Modal -->
     <div id="deleteConfirmModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -479,7 +511,7 @@
                 </button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete this customer? This action cannot be undone.</p>
+                <p>Are you sure you want to delete this customer? This action will also delete all associated deliveries.</p>
                 <p><strong id="deleteCustomerName">-</strong></p>
             </div>
             <div class="modal-actions">
@@ -492,6 +524,189 @@
             </div>
         </div>
     </div>
+    
+    <!-- NEW: Add Staff Modal -->
+    <div id="addStaffModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Staff Member</h3>
+                <button class="btn btn-close" onclick="closeModal('addStaffModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="addStaffForm" onsubmit="addStaff(event)">
+                <div class="form-group">
+                    <label for="staffName">Full Name *</label>
+                    <input type="text" id="staffName" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="staffPhone">Phone Number *</label>
+                    <input type="tel" id="staffPhone" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="staffRole">Role</label>
+                    <select id="staffRole" class="form-input">
+                        <option value="Delivery Driver">Delivery Driver</option>
+                        <option value="Sales Agent">Sales Agent</option>
+                        <option value="Manager">Manager</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="monthlySalary">Monthly Salary (₹) *</label>
+                    <input type="number" id="monthlySalary" class="form-input" min="0" value="0" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addStaffModal')">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-user-plus"></i> Save Staff
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- NEW: Edit Staff Modal -->
+    <div id="editStaffModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Staff Member</h3>
+                <button class="btn btn-close" onclick="closeModal('editStaffModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editStaffForm" onsubmit="updateStaff(event)">
+                <input type="hidden" id="editStaffId">
+                <div class="form-group">
+                    <label for="editStaffName">Full Name *</label>
+                    <input type="text" id="editStaffName" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="editStaffPhone">Phone Number *</label>
+                    <input type="tel" id="editStaffPhone" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="editStaffRole">Role</label>
+                    <select id="editStaffRole" class="form-input">
+                        <option value="Delivery Driver">Delivery Driver</option>
+                        <option value="Sales Agent">Sales Agent</option>
+                        <option value="Manager">Manager</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editMonthlySalary">Monthly Salary (₹)</label>
+                    <input type="number" id="editMonthlySalary" class="form-input" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="editStaffStatus">Status</label>
+                    <select id="editStaffStatus" class="form-input">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editStaffModal')">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Staff
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- NEW: Track Salary Modal -->
+    <div id="trackSalaryModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Record Salary Payment</h3>
+                <button class="btn btn-close" onclick="closeModal('trackSalaryModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="trackSalaryForm" onsubmit="recordSalaryPayment(event)">
+                <input type="hidden" id="trackStaffId">
+                
+                <div class="form-group">
+                    <label>Staff Member</label>
+                    <input type="text" id="trackStaffName" class="form-input" readonly style="background-color: var(--gray-100);">
+                </div>
+                
+                <div class="form-group">
+                    <label for="trackSalaryMonth">Payment Month</label>
+                    <input type="month" id="trackSalaryMonth" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="trackSalaryAmount">Amount Paid (₹)</label>
+                    <input type="number" id="trackSalaryAmount" class="form-input" min="1" required>
+                    <p class="text-sm text-muted" style="margin-top: 5px;">This should be the net amount paid to the staff member.</p>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('trackSalaryModal')">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Confirm Payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- NEW: Delete Staff Confirmation Modal -->
+    <div id="deleteConfirmStaffModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Delete Staff</h3>
+                <button class="btn btn-close" onclick="closeModal('deleteConfirmStaffModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete staff member: <strong><span id="deleteStaffName">-</span></strong>? </p>
+                <p>This action cannot be undone, but recorded salary payments will remain.</p>
+            </div>
+            <input type="hidden" id="staffToDeleteId">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('deleteConfirmStaffModal')">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-danger" onclick="deleteStaffConfirmed()">
+                    <i class="fas fa-trash"></i> Delete Staff
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEW: Clear Notifications Confirmation Modal (for clean code) -->
+    <div id="clearNotificationsConfirmModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Clear All</h3>
+                <button class="btn btn-close" onclick="closeModal('clearNotificationsConfirmModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>ALL</strong> notifications? This action cannot be undone.</p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('clearNotificationsConfirmModal')">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-danger" onclick="confirmClearAllNotifications()">
+                    <i class="fas fa-trash"></i> Clear All
+                </button>
+            </div>
+        </div>
+    </div>
+
 
    <!-- QR Scanner Modal -->
 <div id="scannerModal" class="modal hidden">
@@ -577,6 +792,16 @@
                             <input type="number" id="settingsDefaultPrice" class="form-input" min="1">
                         </div>
                     </div>
+                    
+                    <!-- NEW: Staff Button in Settings -->
+                    <div class="setting-section">
+                        <h4>Management Tools</h4>
+                        <div class="setting-item">
+                            <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('settingsModal'); showView('staff');">
+                                <i class="fas fa-user-tie"></i> Manage Staff Members
+                            </button>
+                        </div>
+                    </div>
 
                     <hr style="border: 0; border-top: 1px solid var(--gray-300); margin: 20px 0;">
 
@@ -624,9 +849,9 @@
             </button>
         </div>
         
-        <button class="nav-item" onclick="showView('billing')">
-            <i class="fas fa-file-invoice"></i>
-            <span>Billing</span>
+        <button class="nav-item" onclick="showView('staff')">
+            <i class="fas fa-user-tie"></i>
+            <span>Staff</span>
         </button>
         
         <button class="nav-item" onclick="showView('reports')">
@@ -638,6 +863,7 @@
     <!-- Hidden Fields -->
     <input type="hidden" id="currentCustomerId">
     <input type="hidden" id="customerToDelete">
+    <input type="hidden" id="staffToDeleteId">
 
     <!-- Firebase Configuration -->
     <script src="firebase-config.js"></script>
