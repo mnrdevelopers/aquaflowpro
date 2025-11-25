@@ -125,6 +125,17 @@ class AquaFlowApp {
         if (staffSearchInput) {
             staffSearchInput.addEventListener('input', (e) => this.filterStaff(e.target.value));
         }
+        
+        // NEW: Staff salary type listener in modals
+        const addStaffSalaryType = document.getElementById('staffSalaryType');
+        if(addStaffSalaryType) {
+            addStaffSalaryType.addEventListener('change', (e) => this.updateSalaryLabel(e.target.value, 'monthlySalaryGroup', 'dailySalaryGroup'));
+        }
+        
+        const editStaffSalaryType = document.getElementById('editStaffSalaryType');
+        if(editStaffSalaryType) {
+             editStaffSalaryType.addEventListener('change', (e) => this.updateSalaryLabel(e.target.value, 'editMonthlySalaryGroup', 'editDailySalaryGroup'));
+        }
 
         // Close modals on backdrop click
         document.addEventListener('click', (e) => {
@@ -132,6 +143,21 @@ class AquaFlowApp {
                 this.closeModal(e.target.id);
             }
         });
+    }
+
+    updateSalaryLabel(salaryType, monthlyGroupId, dailyGroupId) {
+        const monthlyGroup = document.getElementById(monthlyGroupId);
+        const dailyGroup = document.getElementById(dailyGroupId);
+        
+        if (monthlyGroup && dailyGroup) {
+            if (salaryType === 'monthly') {
+                monthlyGroup.classList.remove('hidden');
+                dailyGroup.classList.add('hidden');
+            } else {
+                monthlyGroup.classList.add('hidden');
+                dailyGroup.classList.remove('hidden');
+            }
+        }
     }
 
     showLoading() {
@@ -274,6 +300,16 @@ hideLoading() {
     // NEW: STAFF MANAGEMENT (CRUD & Salary)
     // ==========================================
 
+    getStaffSalaryDisplay(staff) {
+        const amount = staff.monthlySalary || staff.dailySalary || 0;
+        const type = staff.salaryType === 'daily' ? '/day' : '/month';
+        return {
+            amount: formatCurrency(amount),
+            type: type,
+            rawAmount: amount
+        };
+    }
+
     async loadStaff() {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -284,7 +320,14 @@ hideLoading() {
                 .orderBy('name')
                 .get();
             
-            this.staff = staffSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            this.staff = staffSnapshot.docs.map(doc => ({ 
+                id: doc.id, 
+                // Ensure salary defaults are set
+                salaryType: 'monthly', 
+                monthlySalary: 0, 
+                dailySalary: 0,
+                ...doc.data() 
+            }));
             this.filteredStaff = [...this.staff];
 
             // Load Salary Payments (last 1 year for reporting/tracking)
@@ -347,24 +390,36 @@ hideLoading() {
         `;
 
         html += pageStaff.map(staff => {
-            const lastPayment = this.salaryPayments
-                .filter(p => p.staffId === staff.id)
-                .sort((a, b) => b.paidAt?.seconds - a.paidAt?.seconds)[0];
+            const salaryInfo = this.getStaffSalaryDisplay(staff);
             
-            const isPaidThisMonth = this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
+            // Check for monthly payment status
+            const isPaidThisMonth = staff.salaryType === 'monthly' && this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
+
+            // Check for daily payment status (less practical without dates, but we check if *any* payment was made this month)
+            const hasPaymentsThisMonth = staff.salaryType === 'daily' && this.salaryPayments.some(p => p.staffId === staff.id && p.month === currentMonth);
+            
+            // Determine which action button to show
+            let salaryButton;
+            if (staff.salaryType === 'monthly') {
+                if (isPaidThisMonth) {
+                    salaryButton = `<button class="btn btn-sm btn-success" disabled title="Salary Paid"><i class="fas fa-check"></i> Paid</button>`;
+                } else {
+                    salaryButton = `<button class="btn btn-sm btn-warning" onclick="trackSalaryPayment('${staff.id}', '${staff.name}', ${salaryInfo.rawAmount}, '${staff.salaryType}')" title="Record Monthly Salary Payment"><i class="fas fa-rupee-sign"></i> Pay</button>`;
+                }
+            } else { // 'daily'
+                 // For daily, we always allow payment tracking. The button reflects the daily amount.
+                 salaryButton = `<button class="btn btn-sm btn-info" onclick="trackSalaryPayment('${staff.id}', '${staff.name}', ${salaryInfo.rawAmount}, '${staff.salaryType}')" title="Record Daily Salary Payment"><i class="fas fa-rupee-sign"></i> Pay Daily</button>`;
+            }
+
             const statusBadge = staff.status === 'active' 
                 ? `<span class="badge" style="background-color: var(--success); color: var(--white);">Active</span>` 
                 : `<span class="badge" style="background-color: var(--danger); color: var(--white);">Inactive</span>`;
             
-            const salaryButton = isPaidThisMonth 
-                ? `<button class="btn btn-sm btn-success" disabled title="Salary Paid"><i class="fas fa-check"></i> Paid</button>`
-                : `<button class="btn btn-sm btn-warning" onclick="trackSalaryPayment('${staff.id}', '${staff.name}', ${staff.monthlySalary || 0})" title="Record Salary Payment"><i class="fas fa-rupee-sign"></i> Pay</button>`;
-
             return `
                 <tr>
                     <td class="fw-bold">${staff.name}</td>
                     <td>${staff.role || 'N/A'}</td>
-                    <td class="fw-bold text-success">${formatCurrency(staff.monthlySalary || 0)}</td>
+                    <td class="fw-bold text-success">${salaryInfo.amount} <span class="text-sm text-muted">${salaryInfo.type}</span></td>
                     <td>${statusBadge}</td>
                     <td>
                         <div class="action-buttons-row">
@@ -434,12 +489,15 @@ hideLoading() {
         e.preventDefault();
         
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const salaryType = document.getElementById('staffSalaryType').value;
 
         const staffData = {
             name: document.getElementById('staffName').value,
             phone: document.getElementById('staffPhone').value,
             role: document.getElementById('staffRole').value,
-            monthlySalary: parseInt(document.getElementById('monthlySalary').value) || 0,
+            salaryType: salaryType, // NEW
+            monthlySalary: salaryType === 'monthly' ? (parseInt(document.getElementById('monthlySalary').value) || 0) : 0, // NEW
+            dailySalary: salaryType === 'daily' ? (parseInt(document.getElementById('dailySalary').value) || 0) : 0, // NEW
             joinDate: firebase.firestore.FieldValue.serverTimestamp(),
             status: 'active',
             createdBy: this.authUserId
@@ -447,6 +505,12 @@ hideLoading() {
         
         if (!this.userId) {
             showError('Authentication failed. Please sign in again.');
+            return;
+        }
+        
+        // Basic check for amount
+        if ((salaryType === 'monthly' && staffData.monthlySalary <= 0) || (salaryType === 'daily' && staffData.dailySalary <= 0)) {
+            showError('Please enter a valid salary amount greater than zero.');
             return;
         }
 
@@ -467,6 +531,8 @@ hideLoading() {
             await this.addNotification('New Staff Added', `Added staff member: ${staffData.name}`, 'info');
 
             e.target.reset();
+            // Reset salary display state
+            this.updateSalaryLabel('monthly', 'monthlySalaryGroup', 'dailySalaryGroup');
             this.closeModal('addStaffModal');
             
             this.filterStaff(''); 
@@ -495,7 +561,14 @@ hideLoading() {
         document.getElementById('editStaffName').value = staff.name;
         document.getElementById('editStaffPhone').value = staff.phone;
         document.getElementById('editStaffRole').value = staff.role || 'Delivery Driver';
+        
+        // NEW: Load salary type and values
+        const salaryType = staff.salaryType || 'monthly';
+        document.getElementById('editStaffSalaryType').value = salaryType;
         document.getElementById('editMonthlySalary').value = staff.monthlySalary || 0;
+        document.getElementById('editDailySalary').value = staff.dailySalary || 0;
+        this.updateSalaryLabel(salaryType, 'editMonthlySalaryGroup', 'editDailySalaryGroup');
+
         document.getElementById('editStaffStatus').value = staff.status || 'active';
 
         this.showModal('editStaffModal');
@@ -506,15 +579,24 @@ hideLoading() {
         
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const staffId = document.getElementById('editStaffId').value;
+        const salaryType = document.getElementById('editStaffSalaryType').value;
 
         const staffData = {
             name: document.getElementById('editStaffName').value,
             phone: document.getElementById('editStaffPhone').value,
             role: document.getElementById('editStaffRole').value,
-            monthlySalary: parseInt(document.getElementById('editMonthlySalary').value) || 0,
+            salaryType: salaryType, // NEW
+            monthlySalary: salaryType === 'monthly' ? (parseInt(document.getElementById('editMonthlySalary').value) || 0) : 0, // NEW
+            dailySalary: salaryType === 'daily' ? (parseInt(document.getElementById('editDailySalary').value) || 0) : 0, // NEW
             status: document.getElementById('editStaffStatus').value,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
+        
+        // Basic check for amount
+        if ((salaryType === 'monthly' && staffData.monthlySalary <= 0) || (salaryType === 'daily' && staffData.dailySalary <= 0)) {
+            showError('Please enter a valid salary amount greater than zero.');
+            return;
+        }
 
         const submitBtn = e.target.querySelector('button[type="submit"]');
         if (submitBtn.disabled) return; 
@@ -585,12 +667,28 @@ hideLoading() {
         this.showModal('deleteConfirmStaffModal');
     }
 
-    showTrackSalaryModal(staffId, staffName, monthlySalary) {
+    showTrackSalaryModal(staffId, staffName, monthlyOrDailySalary, salaryType) { // UPDATED signature
         const currentMonth = getCurrentMonth();
         document.getElementById('trackStaffId').value = staffId;
         document.getElementById('trackStaffName').value = staffName;
         document.getElementById('trackSalaryMonth').value = currentMonth;
-        document.getElementById('trackSalaryAmount').value = monthlySalary;
+        document.getElementById('trackSalaryAmount').value = monthlyOrDailySalary;
+        
+        // NEW: Update label and input description based on salary type
+        const amountLabel = document.querySelector('#trackSalaryForm label[for="trackSalaryAmount"]');
+        const amountNote = document.getElementById('trackSalaryAmountNote');
+        
+        if (salaryType === 'monthly') {
+            amountLabel.textContent = 'Monthly Amount Paid (₹)';
+            amountNote.textContent = 'This should be the full monthly salary amount paid to the staff member.';
+        } else {
+            amountLabel.textContent = 'Daily Amount Paid (₹)';
+            amountNote.textContent = 'This should be the amount paid for a single day of work.';
+        }
+        
+        document.getElementById('trackSalaryTypeHidden').value = salaryType; // Store type for processing
+        document.getElementById('recordPaymentBtn').innerHTML = `<i class="fas fa-check"></i> Confirm Payment`;
+
         this.showModal('trackSalaryModal');
     }
 
@@ -603,21 +701,26 @@ hideLoading() {
         const staffName = document.getElementById('trackStaffName').value;
         const month = document.getElementById('trackSalaryMonth').value;
         const amount = parseInt(document.getElementById('trackSalaryAmount').value) || 0;
+        const salaryType = document.getElementById('trackSalaryTypeHidden').value; // NEW
         
         if (amount <= 0) {
             showError('Invalid salary amount.');
             return;
         }
 
-        // Check if already paid for this month
-        const alreadyPaid = this.salaryPayments.some(p => 
-            p.staffId === staffId && p.month === month
-        );
+        // Check if MONTHLY already paid for this month
+        if (salaryType === 'monthly') {
+            const alreadyPaid = this.salaryPayments.some(p => 
+                p.staffId === staffId && p.month === month
+            );
 
-        if (alreadyPaid) {
-            showError(`Salary for ${staffName} has already been recorded for ${month}.`);
-            return;
+            if (alreadyPaid) {
+                showError(`Monthly salary for ${staffName} has already been recorded for ${month}.`);
+                return;
+            }
         }
+        
+        // Daily salary can be paid multiple times per month, so no block needed.
 
         const submitBtn = e.target.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;
@@ -630,6 +733,7 @@ hideLoading() {
                 staffName,
                 month,
                 amount,
+                salaryType, // NEW
                 paidAt: firebase.firestore.FieldValue.serverTimestamp(),
                 recordedBy: this.authUserId
             };
@@ -643,8 +747,12 @@ hideLoading() {
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff').doc(staffId).update({
                 lastSalaryPayment: firebase.firestore.FieldValue.serverTimestamp()
             });
+            
+            const message = salaryType === 'monthly' 
+                ? `Paid monthly salary of ${formatCurrency(amount)} to ${staffName}`
+                : `Paid daily wages of ${formatCurrency(amount)} to ${staffName}`;
 
-            await this.addNotification('Salary Paid', `Paid ${staffName} ${formatCurrency(amount)} for ${month}`, 'success');
+            await this.addNotification('Salary Paid', message, 'success');
             
             this.closeModal('trackSalaryModal');
             this.displayStaff();
@@ -2280,19 +2388,20 @@ ${businessName}`;
         const monthlyStaffPayments = this.salaryPayments.filter(p => p.month === currentMonth);
         const totalMonthlySalaryPaid = monthlyStaffPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
         
-        // List staff who haven't been paid this month
+        // List monthly staff who haven't been paid this month
         const unpaidStaff = this.staff.filter(staff => 
             staff.status === 'active' && 
-            !monthlyStaffPayments.some(p => p.staffId === staff.id)
+            staff.salaryType === 'monthly' && // Only check monthly staff for monthly payment status
+            !monthlyStaffPayments.some(p => p.staffId === staff.id && p.salaryType === 'monthly')
         );
         
         staffSalaryReport.innerHTML = `
              <div style="text-align: center; width: 100%;">
                 <div style="font-size: 1.8rem; font-weight: bold; color: var(--danger);">${formatCurrency(totalMonthlySalaryPaid)}</div>
-                <div style="color: var(--gray-600); margin-bottom: 1rem;">Salary Paid This Month (${currentMonth})</div>
+                <div style="color: var(--gray-600); margin-bottom: 1rem;">Total Staff Wages Paid This Month (${currentMonth})</div>
                 
                 <div style="text-align: left; margin-top: 1.5rem;">
-                    <h5 style="font-size: 1rem; color: var(--primary-dark); margin-bottom: 0.5rem;">Unpaid Staff (${unpaidStaff.length})</h5>
+                    <h5 style="font-size: 1rem; color: var(--primary-dark); margin-bottom: 0.5rem;">Monthly Staff Unpaid (${unpaidStaff.length})</h5>
                     <div style="background: var(--gray-100); padding: 1rem; border-radius: 8px;">
                         ${unpaidStaff.length > 0 ? 
                             unpaidStaff.map(staff => `
@@ -2301,7 +2410,7 @@ ${businessName}`;
                                     <span class="text-danger">${formatCurrency(staff.monthlySalary || 0)}</span>
                                 </div>
                             `).join('')
-                            : '<p style="font-size: 0.9rem; color: var(--success);">All active staff paid.</p>'
+                            : '<p style="font-size: 0.9rem; color: var(--success);">All active monthly staff paid.</p>'
                         }
                         <button class="btn btn-sm btn-secondary" onclick="showView('staff')" style="margin-top: 1rem;">Manage Staff</button>
                     </div>
@@ -2451,7 +2560,11 @@ function showAddCustomerModal() {
 }
 
 function showAddStaffModal() {
-    if (app) app.showModal('addStaffModal');
+    if (app) {
+        // Ensure initial state is monthly on show
+        app.updateSalaryLabel('monthly', 'monthlySalaryGroup', 'dailySalaryGroup');
+        app.showModal('addStaffModal');
+    }
 }
 
 function closeModal(modalId) {
@@ -2661,8 +2774,8 @@ function addCustomer(e) {
     if (app) app.addCustomer(e);
 }
 
-function trackSalaryPayment(staffId, staffName, monthlySalary) {
-    if (app) app.showTrackSalaryModal(staffId, staffName, monthlySalary);
+function trackSalaryPayment(staffId, staffName, monthlyOrDailySalary, salaryType) { // UPDATED signature
+    if (app) app.showTrackSalaryModal(staffId, staffName, monthlyOrDailySalary, salaryType);
 }
 
 function recordSalaryPayment(e) {
