@@ -152,6 +152,9 @@ class AuthManager {
    async handleLogin(e) {
     e.preventDefault();
     
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    this.setButtonLoading(submitBtn, true, '<i class="fas fa-sign-in-alt"></i> Sign In');
+    
     // Perform full form validation before submitting
     const inputs = document.querySelectorAll('#loginForm input[required]');
     let isValid = true;
@@ -159,59 +162,68 @@ class AuthManager {
         if (!this.validateInput(input)) isValid = false;
     });
 
-    if (!isValid) return;
+    if (!isValid) {
+        this.setButtonLoading(submitBtn, false, '<i class="fas fa-sign-in-alt"></i> Sign In');
+        return;
+    }
     
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     
     try {
-        this.setFormLoading('loginForm', true);
         await auth.signInWithEmailAndPassword(email, password);
         showSuccess('Welcome back!');
         // Redirect handled by listener
     } catch (error) {
         console.error('Login error:', error);
         this.handleAuthError(error);
-        this.setFormLoading('loginForm', false);
+        this.setButtonLoading(submitBtn, false, '<i class="fas fa-sign-in-alt"></i> Sign In');
     }
 }
 
     // Handle Password Reset
     async handlePasswordReset(e) {
         e.preventDefault();
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+
+        this.setButtonLoading(submitBtn, true, '<i class="fas fa-paper-plane"></i> Sending...');
+        
         const emailInput = document.getElementById('resetEmail');
         const email = emailInput.value;
 
         if (!this.isValidEmail(email)) {
             this.showInputError(emailInput, 'Please enter a valid email');
+            this.setButtonLoading(submitBtn, false, originalText);
             return;
         }
-
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-
+        
         try {
             await auth.sendPasswordResetEmail(email);
             showSuccess('Password reset link sent to your email!');
+            
+            // Restore button but hide it since we switch views
+            this.setButtonLoading(submitBtn, false, originalText);
+            
             // Switch back to login after short delay
             setTimeout(() => {
                 showTab('login');
                 emailInput.value = '';
             }, 3000);
+            
         } catch (error) {
             console.error('Reset error:', error);
             this.handleAuthError(error);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
+            this.setButtonLoading(submitBtn, false, originalText);
         }
     }
 
    async handleSignup(e) {
         e.preventDefault();
         
+        const submitBtn = document.getElementById('signupBtn');
+        this.setButtonLoading(submitBtn, true, '<i class="fas fa-user-plus"></i> Creating Account...');
+
         // Perform full form validation before submitting
         const inputs = document.querySelectorAll('#signupForm input[required]');
         let isValid = true;
@@ -219,7 +231,10 @@ class AuthManager {
             if (!this.validateInput(input)) isValid = false;
         });
 
-        if (!isValid) return;
+        if (!isValid) {
+            this.setButtonLoading(submitBtn, false, '<i class="fas fa-user-plus"></i> Create Business Account');
+            return;
+        }
         
         const email = document.getElementById('signupEmail').value;
         const password = document.getElementById('signupPassword').value;
@@ -244,8 +259,6 @@ class AuthManager {
         };
         
         try {
-            this.setFormLoading('signupForm', true);
-            
             // Create user account
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
@@ -273,26 +286,28 @@ class AuthManager {
         } catch (error) {
             console.error('Signup error:', error);
             this.handleAuthError(error);
-            this.setFormLoading('signupForm', false);
+            this.setButtonLoading(submitBtn, false, '<i class="fas fa-user-plus"></i> Create Business Account');
         }
     }
-
-    setFormLoading(formId, isLoading) {
-        const form = document.getElementById(formId);
-        if(!form) return;
-        const submitBtn = form.querySelector('button[type="submit"]');
+    
+    // Updated setButtonLoading to use the new CSS spinner
+    setButtonLoading(button, isLoading, originalText) {
+        if (!button) return;
 
         if (isLoading) {
-            form.classList.add('loading');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            button.classList.add('is-loading');
+            button.disabled = true;
+            // Store original content before overwriting
+            button.setAttribute('data-original-html', button.innerHTML);
+            button.innerHTML = `<span class="btn-spinner"><i class="spinner-border"></i></span><span style="visibility: hidden">${originalText || 'Processing...'}</span>`;
         } else {
-            form.classList.remove('loading');
-            submitBtn.disabled = false;
-            if (formId === 'loginForm') {
-                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
-            } else if (formId === 'signupForm') {
-                 submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Business Account';
+            button.classList.remove('is-loading');
+            button.disabled = false;
+            // Restore original content
+            const originalHtml = button.getAttribute('data-original-html');
+            if (originalHtml) {
+                button.innerHTML = originalHtml;
+                button.removeAttribute('data-original-html');
             }
         }
     }
@@ -364,6 +379,10 @@ class AuthManager {
 
     async logout() {
         try {
+            // Find the logout button if on app.html/index.html to apply loading state
+            const logoutButton = document.querySelector('.menu-logout .btn-danger'); 
+            this.setButtonLoading(logoutButton, true, 'Signing Out');
+
             await auth.signOut();
             localStorage.removeItem('userData');
             showSuccess('Signed out successfully');
