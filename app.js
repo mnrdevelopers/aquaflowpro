@@ -1942,10 +1942,20 @@ hideLoading() {
     }
 
     // Scanner Functions
-    openScanner() {
-        this.showModal('scannerModal');
+   async openScanner() {
+    // Check camera permissions first
+    const hasPermission = await this.checkCameraPermissions();
+    if (!hasPermission) {
+        showError('Camera access is required for QR scanning. Please allow camera permissions and try again.');
+        return;
     }
-
+    
+    this.showModal('scannerModal');
+    // Small delay to ensure modal is visible before initializing scanner
+    setTimeout(() => {
+        this.initializeScanner();
+    }, 300);
+}
     closeScanner() {
         this.closeModal('scannerModal');
         this.stopScanner();
@@ -1957,62 +1967,106 @@ hideLoading() {
         this.initializeScanner(); // Re-initialize the scanner on explicit back click
     }
 
-    loadQRScript() {
-        return new Promise((resolve, reject) => {
-            if (typeof Html5Qrcode !== 'undefined') {
-                resolve();
-                return;
-            }
-            console.log('Loading QR script dynamically...');
-            const script = document.createElement('script');
-            script.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
-            script.onload = () => {
-                console.log('QR script loaded successfully');
-                resolve();
-            };
-            script.onerror = () => reject(new Error('Failed to load QR script'));
-            document.head.appendChild(script);
-        });
-    }
-
-    async initializeScanner() {
-        try {
-            await this.loadQRScript();
-
-            if (typeof Html5Qrcode === 'undefined') {
-                throw new Error('QR Scanner library not loaded');
-            }
-
-            const placeholder = document.getElementById('scannerPlaceholder');
-            const qrReader = document.getElementById('qrReader');
-            
-            if (placeholder) placeholder.classList.add('hidden');
-            if (qrReader) qrReader.classList.remove('hidden');
-            
-            // Clear any previous instance to avoid conflicts
-            if (this.html5QrCode && this.html5QrCode.isScanning) {
-                await this.html5QrCode.stop().catch(() => {});
-            }
-            if (this.html5QrCode) {
-                 this.html5QrCode.clear();
-            }
-
-            this.html5QrCode = new Html5Qrcode("qrReader");
-            
-            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
-
-            await this.html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                (decodedText) => { this.onScanSuccess(decodedText); },
-                (errorMessage) => { console.log('Scan failed:', errorMessage); }
-            );
-            
-        } catch (error) {
-            console.error('Scanner initialization error:', error);
-            this.handleScannerError(error);
+   async loadQRScript() {
+    return new Promise((resolve, reject) => {
+        // Check if already loaded
+        if (typeof Html5Qrcode !== 'undefined') {
+            console.log('QR Scanner library already loaded');
+            resolve();
+            return;
         }
+        
+        // Check if script tag already exists
+        const existingScript = document.querySelector('script[src*="html5-qrcode"]');
+        if (existingScript) {
+            console.log('QR Scanner script already in DOM');
+            // Wait for it to load
+            existingScript.onload = () => resolve();
+            existingScript.onerror = () => reject(new Error('Failed to load QR script'));
+            return;
+        }
+
+        console.log('Loading QR script dynamically...');
+        const script = document.createElement('script');
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
+        script.onload = () => {
+            console.log('QR script loaded successfully');
+            resolve();
+        };
+        script.onerror = () => {
+            console.error('Failed to load QR script');
+            reject(new Error('Failed to load QR Scanner library'));
+        };
+        document.head.appendChild(script);
+    });
+}
+
+    async checkCameraPermissions() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Stop immediately if we got access
+        stream.getTracks().forEach(track => track.stop());
+        return true;
+    } catch (error) {
+        console.error('Camera permission denied:', error);
+        return false;
     }
+}
+    
+   async initializeScanner() {
+    try {
+        console.log('Initializing QR scanner...');
+        
+        await this.loadQRScript();
+
+        if (typeof Html5Qrcode === 'undefined') {
+            throw new Error('QR Scanner library not loaded properly');
+        }
+
+        const placeholder = document.getElementById('scannerPlaceholder');
+        const qrReader = document.getElementById('qrReader');
+        
+        if (placeholder) placeholder.classList.add('hidden');
+        if (qrReader) {
+            qrReader.classList.remove('hidden');
+            qrReader.innerHTML = ''; // Clear previous instance
+        }
+        
+        // Stop any existing scanner
+        if (this.html5QrCode && this.html5QrCode.isScanning) {
+            await this.html5QrCode.stop().catch(() => {});
+        }
+
+        // Create new instance
+        this.html5QrCode = new Html5Qrcode("qrReader");
+        
+        const config = { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 }, 
+            aspectRatio: 1.0 
+        };
+
+        console.log('Starting camera...');
+        await this.html5Qrcode.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText) => { 
+                console.log('QR Code detected:', decodedText);
+                this.onScanSuccess(decodedText); 
+            },
+            (errorMessage) => { 
+                console.log('Scan ongoing:', errorMessage); 
+                // This is normal - it's just reporting no QR code found yet
+            }
+        );
+        
+        console.log('QR Scanner started successfully');
+        
+    } catch (error) {
+        console.error('Scanner initialization error:', error);
+        this.handleScannerError(error);
+    }
+}
 
     onScanSuccess(decodedText) {
         this.handleScannedQR(decodedText);
