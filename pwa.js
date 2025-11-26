@@ -39,11 +39,31 @@ class PWAHandler {
         }
     }
 
-    async checkForUpdates() {
+   async checkForUpdates() {
     if ('serviceWorker' in navigator) {
         try {
             const registration = await navigator.serviceWorker.ready;
-            registration.update(); // Force update check
+            
+            // Check if there's a waiting service worker
+            if (registration.waiting) {
+                this.showUpdateNotification();
+                return;
+            }
+            
+            // Check for updates
+            await registration.update();
+            
+            // Listen for updates
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                console.log('Service Worker update found!');
+                
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        this.showUpdateNotification();
+                    }
+                });
+            });
         } catch (error) {
             console.log('Update check failed:', error);
         }
