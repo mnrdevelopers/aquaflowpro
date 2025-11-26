@@ -8,6 +8,8 @@ const urlsToCache = [
   '/aquaflowpro/firebase-config.js',
   '/aquaflowpro/auth.js',
   '/aquaflowpro/app.js',
+  '/aquaflowpro/pwa.js',
+  '/aquaflowpro/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js',
@@ -19,15 +21,16 @@ const urlsToCache = [
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing... v2.2.0');
+  console.log('Service Worker installing... v2.2.2');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Opened cache v2.2.0');
+        console.log('Opened cache v2.2.2');
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('All resources cached successfully v2.2.0');
+        console.log('All resources cached successfully v2.2.2');
+        // Skip waiting to activate immediately
         return self.skipWaiting();
       })
       .catch((error) => {
@@ -36,9 +39,9 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and claim clients immediately
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating v2.2.0...');
+  console.log('Service Worker activating v2.2.2...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -50,7 +53,8 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => {
-      console.log('Service Worker activated v2.2.0');
+      console.log('Service Worker activated v2.2.2 - claiming clients');
+      // Immediately claim all clients to ensure the new SW controls the page
       return self.clients.claim();
     })
   );
@@ -64,7 +68,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // For same-origin requests, use cache-first strategy
-  if (event.request.url.includes('mnrdevelopers.github.io/aquaflowpro')) {
+  if (event.request.url.startsWith(self.location.origin)) {
     event.respondWith(
       caches.match(event.request)
         .then((response) => {
@@ -103,8 +107,21 @@ self.addEventListener('fetch', (event) => {
 // Handle messages from the client
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log('Skipping waiting - activating new service worker');
-    self.skipWaiting();
+    console.log('Received SKIP_WAITING message - activating immediately');
+    self.skipWaiting().then(() => {
+      console.log('Skip waiting completed, claiming clients');
+      return self.clients.claim();
+    }).then(() => {
+      // Notify all clients to reload
+      self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({
+            type: 'SW_UPDATED',
+            message: 'Service Worker updated - please reload'
+          });
+        });
+      });
+    });
   }
   
   if (event.data && event.data.type === 'GET_VERSION') {
