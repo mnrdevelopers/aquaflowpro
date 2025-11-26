@@ -490,7 +490,15 @@ hideLoading() {
             button.disabled = true;
             // Store original content before overwriting
             button.setAttribute('data-original-html', button.innerHTML);
-            button.innerHTML = `<span class="btn-spinner"><i class="spinner-border"></i></span><span style="visibility: hidden">${originalText || 'Processing...'}</span>`;
+            // Use raw text for accessibility/mobile clarity when obscured
+            const displayText = originalText.replace(/<[^>]*>?/gm, ''); 
+            
+            button.innerHTML = `
+                <span class="btn-spinner">
+                    <div class="spinner-border" role="status"></div>
+                </span>
+                <span style="visibility: hidden;">${displayText}</span>
+            `;
         } else {
             button.classList.remove('is-loading');
             button.disabled = false;
@@ -559,7 +567,7 @@ hideLoading() {
             console.error('Error adding staff:', error);
             showError('Failed to add staff member');
         } finally {
-            this.setButtonLoading(submitBtn, false);
+            this.setButtonLoading(submitBtn, false, 'Save Staff');
         }
     }
 
@@ -633,7 +641,7 @@ hideLoading() {
             console.error('Error updating staff:', error);
             showError('Failed to update staff member');
         } finally {
-            this.setButtonLoading(submitBtn, false);
+            this.setButtonLoading(submitBtn, false, 'Update Staff');
         }
     }
 
@@ -826,7 +834,7 @@ hideLoading() {
             console.error('Error recording salary payment:', error);
             showError('Failed to record salary payment');
         } finally {
-            this.setButtonLoading(submitBtn, false);
+            this.setButtonLoading(submitBtn, false, 'Confirm Payment');
         }
     }
 
@@ -1223,7 +1231,7 @@ hideLoading() {
 
     async confirmDeleteDelivery() {
         // Replacing `confirm()` with a modal/better UI is recommended.
-        // For simplicity, we are identifying the button that triggers the action.
+        // For now, retaining a simple check before proceeding with the action.
         const deleteBtn = document.querySelector('#editDeliveryModal button.btn-danger');
         
         if(!window.confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
@@ -1758,6 +1766,8 @@ hideLoading() {
                             border-radius: 12px;
                             margin-bottom: 20px;
                             padding: 10px;
+                            /* Placeholder image to avoid error in print window if QR fails */
+                            content: url('https://placehold.co/180x180/1A3D64/ffffff?text=QR+Code+Error'); 
                         }
                         .customer-name {
                             font-size: 1.25rem;
@@ -1871,7 +1881,7 @@ hideLoading() {
                             <div class="card-subtitle">Water Delivery Service</div>
                         </div>
                         <div class="card-body">
-                            <img src="${customer.qrCodeUrl}" alt="QR Code" class="qr-image">
+                            <img src="${customer.qrCodeUrl}" onerror="this.src = 'https://placehold.co/180x180/1A3D64/ffffff?text=QR+Code+Error';" alt="QR Code" class="qr-image">
                             
                             <h2 class="customer-name">${customer.name}</h2>
                             <div class="customer-details">
@@ -2677,12 +2687,14 @@ ${businessName}`;
 
         try {
              const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).update({
+             
+             // FIX: Use set with merge: true to ensure the document is created if it doesn't exist.
+             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).set({
                  businessName,
                  defaultPrice,
                  businessPhone, // Save the contact number
                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-             });
+             }, { merge: true });
              
              // Update local user data
              if (this.userData) {
@@ -2690,6 +2702,7 @@ ${businessName}`;
                  this.userData.defaultPrice = defaultPrice;
                  this.userData.businessPhone = businessPhone;
              } else {
+                 // Initialize userData if it was empty (e.g., loaded with just fallback data)
                  this.userData = { businessName, defaultPrice, businessPhone };
              }
              
@@ -2697,7 +2710,7 @@ ${businessName}`;
              this.closeModal('settingsModal');
              showSuccess('Settings saved successfully');
         } catch(error) {
-            console.error(error);
+            console.error('saveSettings error:', error);
             showError('Failed to save settings');
         } finally {
             this.setButtonLoading(submitBtn, false, 'Save Changes');
