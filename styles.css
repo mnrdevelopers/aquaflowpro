@@ -140,10 +140,10 @@ body {
     padding: var(--space-sm);
     background: var(--gray-100); /* Changed from transparent to light gray background */
     color: var(--primary); /* Icon color set to primary blue */
-    border-radius: var(--radius-full);
+    border-radius: 10px;
     transition: all 0.3s ease-in-out; /* Add transition for animation */
     /* NEW: Added subtle border for aesthetics */
-    border: 1px solid var(--gray-300); 
+    border: 5px solid var(--gray-300); 
     box-shadow: var(--shadow-sm);
 }
 
