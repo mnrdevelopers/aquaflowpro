@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aquaflow-pro-v2.2.2'; // Incremented version
+const CACHE_NAME = 'aquaflow-pro-v2.2.3'; // Incremented version
 const urlsToCache = [
   '/aquaflowpro/',
   '/aquaflowpro/index.html',
