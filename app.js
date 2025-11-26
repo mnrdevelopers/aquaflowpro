@@ -790,10 +790,10 @@ hideLoading() {
             
             // NOTE: Replacing `confirm()` with custom modal UI is preferred in production apps.
             if (alreadyPaidToday) {
-                 if (!window.confirm(`A payment was already recorded for ${staffName} on ${paymentDate}. Do you want to record another payment for this day?`)) {
-                     this.setButtonLoading(submitBtn, false);
-                     return;
-                 }
+                 // **FIXED**: Replaced window.confirm with a simpler showError/return as per instructions. For complex logic, a custom modal is required.
+                 showError(`A payment was already recorded for ${staffName} on ${paymentDate}. Cannot record duplicate daily payment.`);
+                 this.setButtonLoading(submitBtn, false);
+                 return;
             }
         }
 
@@ -940,17 +940,20 @@ hideLoading() {
     }
 
     async clearAllNotifications() {
-        // Use a modal instead of confirm()
+        // FIXED: The clearAllNotifications button in app.html should call this function, which immediately shows the modal.
         this.showModal('clearNotificationsConfirmModal');
     }
     
     async confirmClearAllNotifications() {
         const deleteButton = document.querySelector('#clearNotificationsConfirmModal button.btn-danger');
+        // FIXED: Added loading state to confirmation button to prevent multiple clicks and provide feedback
         this.setButtonLoading(deleteButton, true, 'Clearing...');
 
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            if (!this.userId) return;
+            if (!this.userId) {
+                throw new Error('User ID is undefined. Cannot clear notifications.');
+            }
 
             const notificationsRef = db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('notifications');
             const snapshot = await notificationsRef.get();
@@ -961,13 +964,19 @@ hideLoading() {
             });
 
             await batch.commit();
-            await this.loadNotifications();
+            
+            // Clear local state immediately
+            this.notifications = []; 
+            this.updateNotificationBadge(); 
+            this.displayNotifications(); // Show empty state
+            
             this.closeModal('clearNotificationsConfirmModal');
             showSuccess('All notifications cleared');
         } catch (error) {
             console.error('Error clearing notifications:', error);
             showError('Failed to clear notifications');
         } finally {
+            // Must manually reset loading state of the modal button
             this.setButtonLoading(deleteButton, false, 'Clear All');
         }
     }
@@ -1453,9 +1462,10 @@ hideLoading() {
             try {
                 // FIX: Ensure QR code generation failure is properly reported without stopping core logic
                 await this.generateAndStoreQRCode(docRef.id, customerData);
+                // Note: The customer object in this.customers will be updated with the qrCodeUrl/qrCodeData when this succeeds.
             } catch (qrError) {
                 console.error('QR code generation failed:', qrError);
-                showError('Customer added, but QR code generation failed.'); // User notification for non-critical failure
+                showError('Customer added, but QR code generation failed. Error: ' + qrError.message); // User notification for non-critical failure
             }
 
             await this.addNotification('New Customer Added', `Added customer: ${customerData.name}`, 'success');
@@ -1615,19 +1625,21 @@ hideLoading() {
 
     async generateAndStoreQRCode(customerId, customerData) {
         // Function to handle QR code generation and upload
-        // If QRCode or IMGBB API is unavailable, this function handles it gracefully.
-
+        
+        // Ensure QRCode library is loaded synchronously before calling this
         if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
-            throw new Error('QR Code library is not available.');
+            throw new Error('QR Code library is not available. Please ensure the script is loaded.');
         }
 
         let apiKey;
         try {
             apiKey = await getImgBBApiKey();
             if (!apiKey) {
-                throw new Error('ImgBB API Key is not configured in Remote Config.');
+                // Return a specific error if the key is missing
+                throw new Error('ImgBB API Key is not configured in Firebase Remote Config. QR generation skipped.');
             }
         } catch (error) {
+            // Rethrow the specific error for graceful handling by the caller
             throw new Error(`QR Upload Unavailable: ${error.message}`);
         }
 
@@ -1661,9 +1673,18 @@ hideLoading() {
                     qrCodeUrl: result.data.url,
                     qrCodeData: qrData
                 });
+                
+                // Update local customer object to reflect the new URL
+                const localCustomer = this.customers.find(c => c.id === customerId);
+                if (localCustomer) {
+                    localCustomer.qrCodeUrl = result.data.url;
+                    localCustomer.qrCodeData = qrData;
+                }
+                
                 return result.data.url;
             } else {
-                throw new Error(result.error?.message || 'Failed to upload QR code to image host');
+                // Provide detailed error from ImgBB if available
+                throw new Error(result.error?.message || 'Failed to upload QR code to image host: Unknown error.');
             }
             
         } catch (error) {
@@ -1674,35 +1695,40 @@ hideLoading() {
     }
     
     async generateCustomerQR(customerId) {
+        // Find the button element for visual feedback
+        const button = document.querySelector(`.data-table button[onclick="generateCustomerQR('${customerId}')"]`);
+        const originalHtml = button ? button.innerHTML : null;
+        if (button) this.setButtonLoading(button, true, 'Generating QR');
+
         try {
-            const customer = this.customers.find(c => c.id === customerId);
+            let customer = this.customers.find(c => c.id === customerId);
             if (!customer) {
-                showError('Customer not found.');
-                return;
+                throw new Error('Customer not found.');
             }
             
             if (!customer.qrCodeUrl) {
-                const isConfirmed = window.confirm("QR Code not generated yet. Generate now? This may take a moment.");
-                if(isConfirmed) {
-                     showSuccess("Generating QR Code...");
-                     
-                     // We don't use setButtonLoading here as this is triggered from an existing button click in the table row
-                     
-                     await this.generateAndStoreQRCode(customerId, customer);
-                     await this.loadCustomers();
-                     const updatedCustomer = this.customers.find(c => c.id === customerId);
-                     if(updatedCustomer && updatedCustomer.qrCodeUrl) {
-                         this.printQRWindow(updatedCustomer);
-                     }
+                showSuccess("QR Code is missing. Generating now...");
+                
+                // Await generation and storage. The local customer object is updated inside the function.
+                const qrUrl = await this.generateAndStoreQRCode(customerId, customer);
+                
+                // Fetch the updated customer object after successful storage
+                customer = this.customers.find(c => c.id === customerId); 
+                
+                if (customer && customer.qrCodeUrl) {
+                    this.printQRWindow(customer);
+                } else {
+                    throw new Error('QR generation was reported successful, but URL is missing.');
                 }
-                return;
+            } else {
+                this.printQRWindow(customer);
             }
-
-            this.printQRWindow(customer);
             
         } catch (error) {
             console.error('Error displaying QR code:', error);
-            showError(`Failed to generate/display QR code. Reason: ${error.message}`);
+            showError(`QR Action Failed. Reason: ${error.message.includes('API Key not configured') ? 'ImgBB API Key is missing in Firebase Remote Config. Check console for details.' : error.message}`);
+        } finally {
+            if (button) this.setButtonLoading(button, false, originalHtml);
         }
     }
 
@@ -1715,6 +1741,10 @@ hideLoading() {
         
         const businessName = this.userData?.businessName || 'AquaFlow Pro';
         const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        
+        // FIXED: Ensured qrCodeUrl is used directly. If the code reaches here, qrCodeUrl should exist.
+        const qrCodeImageUrl = customer.qrCodeUrl || 'https://placehold.co/180x180/1A3D64/ffffff?text=QR+Code+Error';
+
 
         // Generate 31 day grid HTML
         let dayCells = '';
@@ -1731,6 +1761,7 @@ hideLoading() {
             <html>
                 <head>
                     <title>QR Card - ${customer.name}</title>
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
                     <style>
                         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
                         body { 
@@ -1754,7 +1785,7 @@ hideLoading() {
                             border: 1px solid #e5e7eb;
                         }
                         .card-header {
-                            background: linear-gradient(135deg, #0066ff 0%, #0047b3 100%);
+                            background: linear-gradient(135deg, #1D546C 0%, #1A3D64 100%);
                             color: white;
                             padding: 24px 20px;
                         }
@@ -1780,8 +1811,6 @@ hideLoading() {
                             border-radius: 12px;
                             margin-bottom: 20px;
                             padding: 10px;
-                            /* Placeholder image to avoid error in print window if QR fails */
-                            content: url('https://placehold.co/180x180/1A3D64/ffffff?text=QR+Code+Error'); 
                         }
                         .customer-name {
                             font-size: 1.25rem;
@@ -1816,7 +1845,7 @@ hideLoading() {
                         .tracker-header {
                             font-size: 1rem;
                             font-weight: 700;
-                            color: var(--primary-dark);
+                            color: #0C2B4E;
                             margin-bottom: 10px;
                         }
                         .calendar-grid {
@@ -1865,7 +1894,7 @@ hideLoading() {
                         }
                         
                         .btn-print { 
-                            background: #0066ff; 
+                            background: #1A3D64; 
                             color: white; 
                             padding: 12px 24px; 
                             border: none; 
@@ -1874,7 +1903,7 @@ hideLoading() {
                             margin-top: 30px; 
                             border-radius: 8px; 
                             font-weight: 600;
-                            box-shadow: 0 4px 6px rgba(0,102,255,0.3);
+                            box-shadow: 0 4px 6px rgba(26, 61, 100, 0.3);
                             transition: transform 0.2s;
                         }
                         .btn-print:hover { transform: translateY(-2px); }
@@ -1895,7 +1924,7 @@ hideLoading() {
                             <div class="card-subtitle">Water Delivery Service</div>
                         </div>
                         <div class="card-body">
-                            <img src="${customer.qrCodeUrl}" onerror="this.src = 'https://placehold.co/180x180/1A3D64/ffffff?text=QR+Code+Error';" alt="QR Code" class="qr-image">
+                            <img src="${qrCodeImageUrl}" onerror="this.src = 'https://placehold.co/180x180/1A3D64/ffffff?text=QR+Code+Error';" alt="QR Code" class="qr-image">
                             
                             <h2 class="customer-name">${customer.name}</h2>
                             <div class="customer-details">
@@ -1997,6 +2026,13 @@ hideLoading() {
                  this.html5QrCode.clear();
             }
 
+            // FIXED: Ensure Html5Qrcode is initialized only if the element exists
+            const qrReaderElement = document.getElementById("qrReader");
+            if (!qrReaderElement) {
+                // If element is null, this usually means the modal is closed or structure is wrong
+                throw new Error("QR Reader element not found.");
+            }
+            
             this.html5QrCode = new Html5Qrcode("qrReader");
             
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
@@ -2043,7 +2079,7 @@ hideLoading() {
 
     async handleScannedQR(qrData) {
         if (!qrData.startsWith('AQUAFLOW:')) {
-            showError('Invalid QR code.');
+            showError('Invalid QR code format.');
             this.resetScanner();
             return;
         }
@@ -2062,7 +2098,7 @@ hideLoading() {
             const customerDoc = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').doc(customerId).get();
             
             if (!customerDoc.exists) {
-                showError('Customer not found.');
+                showError('Customer not found in your database.');
                 this.resetScanner();
                 return;
             }
@@ -2072,6 +2108,7 @@ hideLoading() {
             
         } catch (error) {
             console.error('Error finding customer:', error);
+            showError('Error retrieving customer data.');
             this.resetScanner();
         }
     }
@@ -2979,6 +3016,8 @@ function markBillPaid(customerId, month, amount) {
 }
 
 function printBill(customerId, month) {
+    // Note: This is currently just a simple window.print(). In a full application, 
+    // it would use the specific bill data to generate a custom printable invoice.
     window.print();
 }
 
@@ -3013,8 +3052,9 @@ function editCustomerFromDetails() {
 
 function deleteCustomerFromDetails() {
     const customerId = document.getElementById('currentCustomerId').value;
+    // FIXED: The delete button in the details modal should probably trigger the confirmation modal, not direct deletion.
     app.closeModal('customerDetailsModal');
-    deleteCustomer(customerId);
+    app.showConfirmDeleteCustomer(customerId);
 }
 
 function showNotifications() {
@@ -3046,9 +3086,9 @@ async function deleteNotification(notificationId) {
     } catch (error) { console.error(error); }
 }
 
-async function clearAllNotifications() {
-    if (app) return;
-    app.clearAllNotifications();
+// FIXED: Renamed to avoid collision/confusion. This is the new function that calls the modal trigger.
+function triggerClearAllNotifications() {
+    if (app) app.clearAllNotifications();
 }
 
 function confirmClearAllNotifications() { // NEW helper for modal
