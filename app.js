@@ -1451,10 +1451,11 @@ hideLoading() {
             this.filteredCustomers.push(customerData); 
 
             try {
+                // FIX: Ensure QR code generation failure is properly reported without stopping core logic
                 await this.generateAndStoreQRCode(docRef.id, customerData);
             } catch (qrError) {
                 console.error('QR code generation failed:', qrError);
-                // Non-critical, continue
+                showError('Customer added, but QR code generation failed.'); // User notification for non-critical failure
             }
 
             await this.addNotification('New Customer Added', `Added customer: ${customerData.name}`, 'success');
@@ -1613,16 +1614,28 @@ hideLoading() {
     }
 
     async generateAndStoreQRCode(customerId, customerData) {
+        // Function to handle QR code generation and upload
+        // If QRCode or IMGBB API is unavailable, this function handles it gracefully.
+
+        if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
+            throw new Error('QR Code library is not available.');
+        }
+
+        let apiKey;
+        try {
+            apiKey = await getImgBBApiKey();
+            if (!apiKey) {
+                throw new Error('ImgBB API Key is not configured in Remote Config.');
+            }
+        } catch (error) {
+            throw new Error(`QR Upload Unavailable: ${error.message}`);
+        }
+
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            // QR Data uses the USER'S ID
             const qrData = `AQUAFLOW:${customerId}:${this.userId}`;
             
             const canvas = document.createElement('canvas');
-            if (typeof QRCode === 'undefined' || !QRCode.toCanvas) {
-                console.warn('QRCode library not loaded.');
-                return;
-            }
             
             await QRCode.toCanvas(canvas, qrData, {
                 width: 400, 
@@ -1631,7 +1644,6 @@ hideLoading() {
             });
 
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-            const apiKey = await getImgBBApiKey();
             
             const formData = new FormData();
             formData.append('image', blob);
@@ -1651,12 +1663,13 @@ hideLoading() {
                 });
                 return result.data.url;
             } else {
-                throw new Error(result.error.message || 'Failed to upload QR code');
+                throw new Error(result.error?.message || 'Failed to upload QR code to image host');
             }
             
         } catch (error) {
-            console.error('Error generating QR code:', error);
-            throw error;
+            console.error('Error during QR code generation/upload:', error);
+            // Rethrow a simplified error for the caller
+            throw new Error(`QR Code generation/upload failed: ${error.message}`);
         }
     }
     
@@ -1672,7 +1685,8 @@ hideLoading() {
                 const isConfirmed = window.confirm("QR Code not generated yet. Generate now? This may take a moment.");
                 if(isConfirmed) {
                      showSuccess("Generating QR Code...");
-                     // Simulate loading state on the triggering element if possible, but difficult to pinpoint from table row.
+                     
+                     // We don't use setButtonLoading here as this is triggered from an existing button click in the table row
                      
                      await this.generateAndStoreQRCode(customerId, customer);
                      await this.loadCustomers();
@@ -1688,7 +1702,7 @@ hideLoading() {
             
         } catch (error) {
             console.error('Error displaying QR code:', error);
-            showError('Failed to display QR code.');
+            showError(`Failed to generate/display QR code. Reason: ${error.message}`);
         }
     }
 
@@ -3033,7 +3047,7 @@ async function deleteNotification(notificationId) {
 }
 
 async function clearAllNotifications() {
-    if (!app) return;
+    if (app) return;
     app.clearAllNotifications();
 }
 
