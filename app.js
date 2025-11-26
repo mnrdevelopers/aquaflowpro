@@ -755,9 +755,9 @@ hideLoading() {
                 return p.staffId === staffId && p.date === paymentDate && p.salaryType === 'daily';
             });
             
+            // NOTE: Replacing `confirm()` with custom modal UI is preferred in production apps.
             if (alreadyPaidToday) {
-                 // Use custom UI for confirmation if possible, but fall back to browser confirm for now
-                 if (!confirm(`A payment was already recorded for ${staffName} on ${paymentDate}. Do you want to record another payment for this day?`)) {
+                 if (!window.confirm(`A payment was already recorded for ${staffName} on ${paymentDate}. Do you want to record another payment for this day?`)) {
                      const submitBtn = e.target.querySelector('button[type="submit"]');
                      submitBtn.disabled = false;
                      submitBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Payment';
@@ -1204,7 +1204,7 @@ hideLoading() {
     async confirmDeleteDelivery() {
         // Replacing `confirm()` with a modal/better UI is recommended.
         // For now, retaining a simple check before proceeding with the action.
-        if(!confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
+        if(!window.confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
         
         const deliveryId = document.getElementById('editDeliveryId').value;
         const customerId = document.getElementById('editDeliveryCustomerId').value;
@@ -1629,7 +1629,7 @@ hideLoading() {
             }
             
             if (!customer.qrCodeUrl) {
-                if(confirm("QR Code not generated yet. Generate now?")) {
+                if(window.confirm("QR Code not generated yet. Generate now?")) {
                      showSuccess("Generating QR Code...");
                      await this.generateAndStoreQRCode(customerId, customer);
                      await this.loadCustomers();
@@ -1890,6 +1890,12 @@ hideLoading() {
     closeScanner() {
         this.closeModal('scannerModal');
         this.stopScanner();
+        this.resetScanner();
+    }
+    
+    showScanView() {
+        this.resetScanner();
+        this.initializeScanner(); // Re-initialize the scanner on explicit back click
     }
 
     loadQRScript() {
@@ -1924,6 +1930,14 @@ hideLoading() {
             if (placeholder) placeholder.classList.add('hidden');
             if (qrReader) qrReader.classList.remove('hidden');
             
+            // Clear any previous instance to avoid conflicts
+            if (this.html5QrCode && this.html5QrCode.isScanning) {
+                await this.html5QrCode.stop().catch(() => {});
+            }
+            if (this.html5QrCode) {
+                 this.html5QrCode.clear();
+            }
+
             this.html5QrCode = new Html5Qrcode("qrReader");
             
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
@@ -2019,6 +2033,10 @@ hideLoading() {
         
         if (qrReader) qrReader.classList.add('hidden');
         if (deliveryForm) deliveryForm.classList.remove('hidden');
+        
+        // Hide scanner placeholder and ensure delivery form is visible
+        const scannerPlaceholder = document.getElementById('scannerPlaceholder');
+        if (scannerPlaceholder) scannerPlaceholder.classList.add('hidden');
     }
 
     async confirmDelivery() {
@@ -2096,6 +2114,21 @@ hideLoading() {
         this.currentCustomerId = null;
         const quantityInput = document.getElementById('deliveryQuantity');
         if (quantityInput) quantityInput.value = '1';
+        
+        // Reset scanner HTML if manual entry was active
+        const scannerView = document.getElementById('scannerView');
+        if (scannerView) {
+             scannerView.innerHTML = `
+                <div id="scannerPlaceholder" class="scanner-placeholder">
+                    <i class="fas fa-qrcode"></i>
+                    <p>Position QR code within frame to scan</p>
+                    <button class="btn btn-primary" onclick="initializeScanner()">
+                        Start Camera
+                    </button>
+                </div>
+                <div id="qrReader" style="width: 100%; height: 100%;" class="hidden"></div>
+            `;
+        }
     }
 
     showManualCustomerSelect() {
@@ -2138,14 +2171,26 @@ hideLoading() {
             this.currentView = viewName;
         }
 
-        document.querySelectorAll('.nav-item').forEach(item => {
+        // Deactivate all nav items
+        document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
             item.classList.remove('active');
         });
         
-        const navItem = document.querySelector(`.bottom-nav .nav-item[onclick="showView('${viewName}')"]`);
+        // Activate the corresponding nav item for the main views
+        let navItem = document.querySelector(`.bottom-nav .nav-item[onclick="showView('${viewName}')"]`);
+
+        // Handle case where view is in the hamburger menu (e.g., 'billing')
+        if (!navItem) {
+            // No direct button, use dashboard as the active nav for other menu views
+            if (viewName === 'billing' || viewName === 'reports' || viewName === 'deliveries') {
+                 navItem = document.querySelector(`.bottom-nav .nav-item[onclick="showView('dashboard')"]`);
+            }
+        }
+
         if (navItem) {
             navItem.classList.add('active');
         }
+
 
         // View specific initializations
         if (viewName === 'reports') {
@@ -2416,7 +2461,7 @@ ${businessName}`;
 
     async markBillPaid(customerId, month, amount) {
         // Replacing `confirm()` with a modal/better UI is recommended.
-        if (!confirm(`Mark bill as paid for ${month}? Amount: ${formatCurrency(amount)}`)) return;
+        if (!window.confirm(`Mark bill as paid for ${month}? Amount: ${formatCurrency(amount)}`)) return;
 
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -2538,7 +2583,7 @@ ${businessName}`;
                             `).join('')
                             : '<p style="font-size: 0.9rem; color: var(--success);">All active monthly staff paid.</p>'
                         }
-                        <button class="btn btn-sm btn-secondary" onclick="showView('staff')" style="margin-top: 1rem;">Manage Staff</button>
+                        <button class="btn btn-sm btn-secondary" onclick="closeModal('mainMenuModal'); showView('staff');" style="margin-top: 1rem;">Manage Staff</button>
                     </div>
                 </div>
             </div>
@@ -2699,6 +2744,7 @@ function closeModal(modalId) {
 
 function openScanner() {
     if (app) app.openScanner();
+    if (app) app.initializeScanner(); // Start scanner immediately
 }
 
 function closeScanner() {
@@ -2781,7 +2827,7 @@ function processManualQR() {
 
 function quickDelivery(customerId) {
     // Replacing `prompt()` with a modal/better UI is recommended.
-    const quantity = parseInt(prompt('Enter number of cans:', '1')) || 1;
+    const quantity = parseInt(window.prompt('Enter number of cans:', '1')) || 1;
     if (quantity > 0 && app) {
         const customer = app.customers.find(c => c.id === customerId);
         if (customer) {
@@ -2789,6 +2835,8 @@ function quickDelivery(customerId) {
             const quantityInput = document.getElementById('deliveryQuantity');
             if (quantityInput) quantityInput.value = quantity;
             app.showModal('scannerModal');
+            // The quick delivery button from customers list should open the form immediately, skipping camera view.
+            app.stopScanner(); 
         }
     }
 }
