@@ -91,6 +91,28 @@
         function goToAuth() {
             window.location.href = 'auth.html';
         }
+
+        if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'SW_UPDATED') {
+            console.log('Service Worker updated, reloading page...');
+            showSuccess('App updated successfully! Reloading...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        }
+    });
+    
+    // Listen for controller change (alternative method)
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('Controller changed, checking if reload is needed...');
+        // Only reload if we're not already in the process of reloading
+        if (!window.location.hash.includes('reloading')) {
+            window.location.hash = 'reloading';
+            window.location.reload();
+        }
+    });
+}
     </script>
 </body>
 </html>
