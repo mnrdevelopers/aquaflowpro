@@ -27,10 +27,56 @@
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
 </head>
 <body class="app-page">
+    
+    <!-- NEW: Side Menu Container (Off-Canvas) -->
+    <div id="sideMenuContainer" class="side-menu-container" onclick="if (event.target.id === 'sideMenuBackdrop') app.closeSideMenu()">
+        <div class="side-menu-backdrop" id="sideMenuBackdrop"></div>
+        <div class="side-menu">
+            <div class="menu-header">
+                <h3>Menu</h3>
+                <button class="btn btn-close" onclick="app.closeSideMenu()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="menu-list">
+                 <button class="nav-item" onclick="app.closeSideMenu(); showView('deliveries');">
+                    <i class="fas fa-truck"></i>
+                    <span>Manage Deliveries</span>
+                </button>
+                <button class="nav-item" onclick="app.closeSideMenu(); showView('billing');">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Billing & Payments</span>
+                </button>
+                <button class="nav-item" onclick="app.closeSideMenu(); showView('reports');">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Business Reports</span>
+                </button>
+                 <button class="nav-item" onclick="app.closeSideMenu(); showSettings();">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </button>
+            </div>
+            
+            <div class="menu-logout">
+                <button class="btn btn-danger btn-block" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- END Side Menu Container -->
+    
+    
     <!-- Header -->
     <header class="app-header">
         <div class="header-content">
             <div class="header-left">
+                <!-- NEW: Hamburger Menu Button (Top Left) -->
+                <button class="btn btn-icon" onclick="app.openSideMenu()" title="Main Menu">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <div class="business-info">
                     <h1 id="businessName">AquaFlow Pro</h1>
                     <span class="status-online" id="connectionStatus">
@@ -44,7 +90,7 @@
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge hidden" id="notificationCount">0</span>
                 </button>
-                <!-- Deliveries and Settings moved to the Hamburger Menu Modal -->
+                <!-- Deliveries and Settings moved to the Side Menu -->
             </div>
         </div>
     </header>
@@ -109,7 +155,7 @@
                         <i class="fas fa-user-tie"></i>
                         Manage Staff
                     </button>
-                    <!-- Billing moved to Hamburger Menu, replaced with quick Reports access here -->
+                    <!-- Reports remains here for quick access -->
                     <button class="quick-action-btn" onclick="showView('reports')">
                         <i class="fas fa-chart-bar"></i>
                         Reports
@@ -867,46 +913,11 @@
             </div>
         </div>
     </div>
-    
-    <!-- NEW: Main Menu Modal (Hamburger Menu Content) -->
-    <div id="mainMenuModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 350px; padding: 0;">
-            <div class="modal-header" style="border-bottom: none;">
-                <h3 style="margin: 0;">Main Menu</h3>
-                <button class="btn btn-close" onclick="closeModal('mainMenuModal')">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="menu-list" style="padding: 10px;">
-                 <button class="nav-item" onclick="closeModal('mainMenuModal'); showView('deliveries');" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
-                    <i class="fas fa-truck"></i>
-                    <span>Manage Deliveries</span>
-                </button>
-                <button class="nav-item" onclick="closeModal('mainMenuModal'); showView('billing');" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
-                    <i class="fas fa-file-invoice-dollar"></i>
-                    <span>Billing & Payments</span>
-                </button>
-                <button class="nav-item" onclick="closeModal('mainMenuModal'); showView('reports');" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
-                    <i class="fas fa-chart-line"></i>
-                    <span>Business Reports</span>
-                </button>
-                 <button class="nav-item" onclick="closeModal('mainMenuModal'); showSettings();" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
-                    <i class="fas fa-cog"></i>
-                    <span>Settings</span>
-                </button>
-                <button class="nav-item" onclick="logout()" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px; color: var(--danger);">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </button>
-            </div>
-        </div>
-    </div>
 
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
-        <button class="nav-item" onclick="showView('dashboard')">
+        <button class="nav-item active" onclick="showView('dashboard')">
             <i class="fas fa-home"></i>
             <span>Home</span>
         </button>
@@ -923,15 +934,14 @@
             </button>
         </div>
         
+        <button class="nav-item" onclick="showView('deliveries')">
+            <i class="fas fa-truck"></i>
+            <span>Deliveries</span>
+        </button>
+        
         <button class="nav-item" onclick="showView('staff')">
             <i class="fas fa-user-tie"></i>
             <span>Staff</span>
-        </button>
-        
-        <!-- NEW: Hamburger Menu Button -->
-        <button class="nav-item" onclick="showModal('mainMenuModal')">
-            <i class="fas fa-bars"></i>
-            <span>Menu</span>
         </button>
     </nav>
 
