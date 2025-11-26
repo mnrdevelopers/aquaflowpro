@@ -93,11 +93,7 @@ class AquaFlowApp {
         this.authUserId = user.uid;
         this.userId = user.uid; // Everyone is an owner, data is always under their own UID
 
-        // Check if email is verified
-        if (user && !user.emailVerified) {
-            const banner = document.getElementById('verificationBanner');
-            if (banner) banner.style.display = 'block';
-        }
+        // Email verification logic removed.
         
         if (!this.userData) {
             console.log('User data missing, attempting to load directly...');
@@ -2805,27 +2801,7 @@ ${businessName}`;
         }
     }
     
-    async resendVerificationEmail() {
-        const resendBtn = document.querySelector('#verificationBanner .btn-primary');
-        this.setButtonLoading(resendBtn, true, 'Sending...');
-
-        try {
-            const user = auth.currentUser;
-            if (user) {
-                await user.sendEmailVerification();
-                showSuccess('Verification email sent!');
-            }
-        } catch (error) {
-            console.error('Error sending verification email:', error);
-            if(error.code === 'auth/too-many-requests') {
-                showError('Too many requests. Please try again later.');
-            } else {
-                showError('Failed to send email.');
-            }
-        } finally {
-             this.setButtonLoading(resendBtn, false, 'Resend Link');
-        }
-    }
+    // Email verification logic removed.
 
     showModal(modalId) {
         const modal = document.getElementById(modalId);
