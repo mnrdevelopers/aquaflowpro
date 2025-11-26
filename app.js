@@ -359,7 +359,6 @@ hideLoading() {
                 <div class="empty-state">
                     <i class="fas fa-user-tie"></i>
                     <h3>No Staff Members</h3>
-                    <p>Add your employees to manage their details and salary.</p>
                     <button class="btn btn-primary" onclick="showAddStaffModal()">
                         <i class="fas fa-user-plus"></i> Add Staff Member
                     </button>
@@ -481,10 +480,35 @@ hideLoading() {
         this.staffPage = 1;
         this.displayStaff();
     }
+    
+    // Utility function to set button loading state
+    setButtonLoading(button, isLoading, originalText = null) {
+        if (!button) return;
+
+        if (isLoading) {
+            button.classList.add('is-loading');
+            button.disabled = true;
+            // Store original content before overwriting
+            button.setAttribute('data-original-html', button.innerHTML);
+            button.innerHTML = `<span class="btn-spinner"><i class="spinner-border"></i></span><span style="visibility: hidden">${originalText || 'Processing...'}</span>`;
+        } else {
+            button.classList.remove('is-loading');
+            button.disabled = false;
+            // Restore original content
+            const originalHtml = button.getAttribute('data-original-html');
+            if (originalHtml) {
+                button.innerHTML = originalHtml;
+                button.removeAttribute('data-original-html');
+            }
+        }
+    }
 
     async addStaff(e) {
         e.preventDefault();
         
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        this.setButtonLoading(submitBtn, true, 'Saving Staff');
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const salaryType = document.getElementById('staffSalaryType').value;
 
@@ -492,9 +516,9 @@ hideLoading() {
             name: document.getElementById('staffName').value,
             phone: document.getElementById('staffPhone').value,
             role: document.getElementById('staffRole').value,
-            salaryType: salaryType, // NEW
-            monthlySalary: salaryType === 'monthly' ? (parseInt(document.getElementById('monthlySalary').value) || 0) : 0, // NEW
-            dailySalary: salaryType === 'daily' ? (parseInt(document.getElementById('dailySalary').value) || 0) : 0, // NEW
+            salaryType: salaryType, 
+            monthlySalary: salaryType === 'monthly' ? (parseInt(document.getElementById('monthlySalary').value) || 0) : 0, 
+            dailySalary: salaryType === 'daily' ? (parseInt(document.getElementById('dailySalary').value) || 0) : 0, 
             joinDate: firebase.firestore.FieldValue.serverTimestamp(),
             status: 'active',
             createdBy: this.authUserId
@@ -502,21 +526,15 @@ hideLoading() {
         
         if (!this.userId) {
             showError('Authentication failed. Please sign in again.');
+            this.setButtonLoading(submitBtn, false);
             return;
         }
         
-        // Basic check for amount
         if ((salaryType === 'monthly' && staffData.monthlySalary <= 0) || (salaryType === 'daily' && staffData.dailySalary <= 0)) {
             showError('Please enter a valid salary amount greater than zero.');
+            this.setButtonLoading(submitBtn, false);
             return;
         }
-
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        if (submitBtn.disabled) return; 
-
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
 
         try {
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff').add(staffData);
@@ -528,7 +546,6 @@ hideLoading() {
             await this.addNotification('New Staff Added', `Added staff member: ${staffData.name}`, 'info');
 
             e.target.reset();
-            // Reset salary display state
             this.updateSalaryLabel('monthly', 'monthlySalaryGroup', 'dailySalaryGroup');
             this.closeModal('addStaffModal');
             
@@ -542,8 +559,7 @@ hideLoading() {
             console.error('Error adding staff:', error);
             showError('Failed to add staff member');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
+            this.setButtonLoading(submitBtn, false);
         }
     }
 
@@ -574,6 +590,9 @@ hideLoading() {
     async updateStaff(e) {
         e.preventDefault();
         
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        this.setButtonLoading(submitBtn, true, 'Updating Staff');
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const staffId = document.getElementById('editStaffId').value;
         const salaryType = document.getElementById('editStaffSalaryType').value;
@@ -582,25 +601,18 @@ hideLoading() {
             name: document.getElementById('editStaffName').value,
             phone: document.getElementById('editStaffPhone').value,
             role: document.getElementById('editStaffRole').value,
-            salaryType: salaryType, // NEW
-            monthlySalary: salaryType === 'monthly' ? (parseInt(document.getElementById('editMonthlySalary').value) || 0) : 0, // NEW
-            dailySalary: salaryType === 'daily' ? (parseInt(document.getElementById('editDailySalary').value) || 0) : 0, // NEW
+            salaryType: salaryType, 
+            monthlySalary: salaryType === 'monthly' ? (parseInt(document.getElementById('editMonthlySalary').value) || 0) : 0, 
+            dailySalary: salaryType === 'daily' ? (parseInt(document.getElementById('editDailySalary').value) || 0) : 0, 
             status: document.getElementById('editStaffStatus').value,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        // Basic check for amount
         if ((salaryType === 'monthly' && staffData.monthlySalary <= 0) || (salaryType === 'daily' && staffData.dailySalary <= 0)) {
             showError('Please enter a valid salary amount greater than zero.');
+            this.setButtonLoading(submitBtn, false);
             return;
         }
-
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        if (submitBtn.disabled) return; 
-
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
 
         try {
             await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('staff').doc(staffId).update(staffData);
@@ -621,14 +633,16 @@ hideLoading() {
             console.error('Error updating staff:', error);
             showError('Failed to update staff member');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
+            this.setButtonLoading(submitBtn, false);
         }
     }
 
     async deleteStaff(staffId) {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
+        const deleteButton = document.querySelector('#deleteConfirmStaffModal button.btn-danger');
+        this.setButtonLoading(deleteButton, true, 'Deleting...');
+
         try {
             const staff = this.staff.find(s => s.id === staffId);
             if (!staff) {
@@ -659,6 +673,9 @@ hideLoading() {
         } catch (error) {
             console.error('Error deleting staff:', error);
             showError('Failed to delete staff member');
+        } finally {
+            // Must manually reset loading state of the modal button as it's outside the form handler
+            this.setButtonLoading(deleteButton, false, 'Delete Staff'); 
         }
     }
     
@@ -697,7 +714,8 @@ hideLoading() {
             amountNote.textContent = 'This should be the amount paid for a single day of work.';
         }
         
-        document.getElementById('recordPaymentBtn').innerHTML = `<i class="fas fa-check"></i> Confirm Payment`;
+        const recordPaymentBtn = document.getElementById('recordPaymentBtn');
+        if (recordPaymentBtn) recordPaymentBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Payment';
 
         this.showModal('trackSalaryModal');
     }
@@ -705,6 +723,9 @@ hideLoading() {
     async trackSalaryPayment(e) {
         e.preventDefault();
         
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        this.setButtonLoading(submitBtn, true, 'Recording...');
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         const staffId = document.getElementById('trackStaffId').value;
@@ -719,6 +740,7 @@ hideLoading() {
             // Removed HTML 'required' but kept JS validation check
             if (!month) {
                 showError('Please select a payment month.');
+                this.setButtonLoading(submitBtn, false);
                 return;
             }
         } else {
@@ -726,6 +748,7 @@ hideLoading() {
             // Removed HTML 'required' but kept JS validation check
             if (!paymentDate) {
                 showError('Please select a payment date.');
+                this.setButtonLoading(submitBtn, false);
                 return;
             }
             month = paymentDate.substring(0, 7); // YYYY-MM format for aggregation
@@ -733,6 +756,7 @@ hideLoading() {
         
         if (amount <= 0) {
             showError('Invalid salary amount.');
+            this.setButtonLoading(submitBtn, false);
             return;
         }
 
@@ -744,6 +768,7 @@ hideLoading() {
 
             if (alreadyPaid) {
                 showError(`Monthly salary for ${staffName} has already been recorded for ${month}.`);
+                this.setButtonLoading(submitBtn, false);
                 return;
             }
         }
@@ -758,18 +783,11 @@ hideLoading() {
             // NOTE: Replacing `confirm()` with custom modal UI is preferred in production apps.
             if (alreadyPaidToday) {
                  if (!window.confirm(`A payment was already recorded for ${staffName} on ${paymentDate}. Do you want to record another payment for this day?`)) {
-                     const submitBtn = e.target.querySelector('button[type="submit"]');
-                     submitBtn.disabled = false;
-                     submitBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Payment';
+                     this.setButtonLoading(submitBtn, false);
                      return;
                  }
             }
         }
-
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Recording...';
 
         try {
             const paymentData = {
@@ -808,8 +826,7 @@ hideLoading() {
             console.error('Error recording salary payment:', error);
             showError('Failed to record salary payment');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
+            this.setButtonLoading(submitBtn, false);
         }
     }
 
@@ -920,6 +937,9 @@ hideLoading() {
     }
     
     async confirmClearAllNotifications() {
+        const deleteButton = document.querySelector('#clearNotificationsConfirmModal button.btn-danger');
+        this.setButtonLoading(deleteButton, true, 'Clearing...');
+
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             if (!this.userId) return;
@@ -939,6 +959,8 @@ hideLoading() {
         } catch (error) {
             console.error('Error clearing notifications:', error);
             showError('Failed to clear notifications');
+        } finally {
+            this.setButtonLoading(deleteButton, false, 'Clear All');
         }
     }
 
@@ -1152,8 +1174,7 @@ hideLoading() {
     async updateDelivery(e) {
         e.preventDefault();
         const submitBtn = e.target.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+        this.setButtonLoading(submitBtn, true, 'Updating Delivery');
 
         try {
             const deliveryId = document.getElementById('editDeliveryId').value;
@@ -1196,16 +1217,19 @@ hideLoading() {
             console.error('Error updating delivery:', error);
             showError('Failed to update delivery');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Delivery';
+            this.setButtonLoading(submitBtn, false, 'Update Delivery');
         }
     }
 
     async confirmDeleteDelivery() {
         // Replacing `confirm()` with a modal/better UI is recommended.
-        // For now, retaining a simple check before proceeding with the action.
+        // For simplicity, we are identifying the button that triggers the action.
+        const deleteBtn = document.querySelector('#editDeliveryModal button.btn-danger');
+        
         if(!window.confirm('Are you sure you want to delete this delivery? This will revert the can count for the customer.')) return;
         
+        this.setButtonLoading(deleteBtn, true, 'Deleting...');
+
         const deliveryId = document.getElementById('editDeliveryId').value;
         const customerId = document.getElementById('editDeliveryCustomerId').value;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -1241,6 +1265,8 @@ hideLoading() {
         } catch (error) {
             console.error('Error deleting delivery:', error);
             showError('Failed to delete delivery');
+        } finally {
+            this.setButtonLoading(deleteBtn, false, 'Delete Entry');
         }
     }
 
@@ -1386,6 +1412,9 @@ hideLoading() {
     async addCustomer(e) {
         e.preventDefault();
         
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        this.setButtonLoading(submitBtn, true, 'Saving Customer');
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         const customerData = {
@@ -1402,15 +1431,9 @@ hideLoading() {
         
         if (!this.userId) {
             showError('Authentication failed. Please sign in again.');
+            this.setButtonLoading(submitBtn, false);
             return;
         }
-
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        if (submitBtn.disabled) return; 
-
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
 
         try {
             const docRef = await db.collection('artifacts').doc(appId).collection('users').doc(this.userId).collection('customers').add(customerData);
@@ -1423,7 +1446,7 @@ hideLoading() {
                 await this.generateAndStoreQRCode(docRef.id, customerData);
             } catch (qrError) {
                 console.error('QR code generation failed:', qrError);
-                showError('Customer added but QR code generation failed');
+                // Non-critical, continue
             }
 
             await this.addNotification('New Customer Added', `Added customer: ${customerData.name}`, 'success');
@@ -1442,8 +1465,7 @@ hideLoading() {
             console.error('Error adding customer:', error);
             showError('Failed to add customer');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
+            this.setButtonLoading(submitBtn, false, 'Save Customer');
         }
     }
 
@@ -1467,6 +1489,9 @@ hideLoading() {
     async updateCustomer(e) {
         e.preventDefault();
         
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        this.setButtonLoading(submitBtn, true, 'Update Customer');
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const customerId = document.getElementById('editCustomerId').value;
 
@@ -1503,12 +1528,17 @@ hideLoading() {
         } catch (error) {
             console.error('Error updating customer:', error);
             showError('Failed to update customer');
+        } finally {
+            this.setButtonLoading(submitBtn, false, 'Update Customer');
         }
     }
 
     async deleteCustomer(customerId) {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
+        const deleteButton = document.querySelector('#deleteConfirmModal button.btn-danger');
+        this.setButtonLoading(deleteButton, true, 'Deleting...');
+
         try {
             const customer = this.customers.find(c => c.id === customerId);
             if (!customer) {
@@ -1540,6 +1570,8 @@ hideLoading() {
         } catch (error) {
             console.error('Error deleting customer:', error);
             showError('Failed to delete customer');
+        } finally {
+            this.setButtonLoading(deleteButton, false, 'Delete Customer');
         }
     }
 
@@ -1629,8 +1661,11 @@ hideLoading() {
             }
             
             if (!customer.qrCodeUrl) {
-                if(window.confirm("QR Code not generated yet. Generate now?")) {
+                const isConfirmed = window.confirm("QR Code not generated yet. Generate now? This may take a moment.");
+                if(isConfirmed) {
                      showSuccess("Generating QR Code...");
+                     // Simulate loading state on the triggering element if possible, but difficult to pinpoint from table row.
+                     
                      await this.generateAndStoreQRCode(customerId, customer);
                      await this.loadCustomers();
                      const updatedCustomer = this.customers.find(c => c.id === customerId);
@@ -2045,11 +2080,15 @@ hideLoading() {
             return;
         }
 
+        const confirmBtn = document.querySelector('#deliveryForm button.btn-success');
+        this.setButtonLoading(confirmBtn, true, 'Confirming...');
+
         const quantityInput = document.getElementById('deliveryQuantity');
         const quantity = parseInt(quantityInput ? quantityInput.value : 1) || 1;
         
         if (quantity < 1) {
             showError('Please enter a valid quantity.');
+            this.setButtonLoading(confirmBtn, false, 'Confirm Delivery');
             return;
         }
         
@@ -2098,6 +2137,8 @@ hideLoading() {
         } catch (error) {
             console.error('Error recording delivery:', error);
             showError('Failed to record delivery.');
+        } finally {
+            this.setButtonLoading(confirmBtn, false, 'Confirm Delivery');
         }
     }
 
@@ -2297,6 +2338,9 @@ hideLoading() {
 
     // Billing Functions
     async generateBills() {
+        const button = document.querySelector('#billingView .btn-primary');
+        this.setButtonLoading(button, true, 'Generating Bills');
+        
         const monthInput = document.getElementById('billMonth');
         const customerSelect = document.getElementById('billCustomer');
         
@@ -2307,6 +2351,7 @@ hideLoading() {
         
         if (!month) {
             showError('Please select a month.');
+            this.setButtonLoading(button, false, 'Generate Bills');
             return;
         }
 
@@ -2327,6 +2372,8 @@ hideLoading() {
         } catch (error) {
             console.error('Error generating bills:', error);
             showError('Failed to generate bills.');
+        } finally {
+             this.setButtonLoading(button, false, 'Generate Bills');
         }
     }
 
@@ -2407,14 +2454,14 @@ hideLoading() {
                             `<button class="btn btn-success" disabled>
                                 <i class="fas fa-check-double"></i> PAID
                             </button>` : 
-                            `<button class="btn btn-primary" onclick="markBillPaid('${bill.customerId}', '${bill.month}', ${bill.totalAmount})">
+                            `<button class="btn btn-primary" id="markPaidBtn-${bill.customerId}-${bill.month}" onclick="markBillPaid('${bill.customerId}', '${bill.month}', ${bill.totalAmount})">
                                 <i class="fas fa-check"></i> Mark Paid
                             </button>`
                         }
-                         <button class="btn" style="background-color: #25D366; color: white;" onclick="app.sendWhatsAppReminder('${bill.customerId}', '${bill.month}', ${bill.totalAmount}, ${bill.totalCans})" title="Send WhatsApp Reminder">
+                         <button class="btn" style="background-color: #25D366; color: white;" id="whatsappBtn-${bill.customerId}-${bill.month}" onclick="app.sendWhatsAppReminder('${bill.customerId}', '${bill.month}', ${bill.totalAmount}, ${bill.totalCans})" title="Send WhatsApp Reminder">
                             <i class="fab fa-whatsapp"></i> Remind
                         </button>
-                        <button class="btn btn-secondary" onclick="printBill('${bill.customerId}', '${bill.month}')">
+                        <button class="btn btn-secondary" id="printBtn-${bill.customerId}-${bill.month}" onclick="printBill('${bill.customerId}', '${bill.month}')">
                             <i class="fas fa-print"></i> Print
                         </button>
                     </div>
@@ -2428,6 +2475,12 @@ hideLoading() {
     sendWhatsAppReminder(customerId, month, amount, totalCans) {
         const customer = this.customers.find(c => c.id === customerId);
         if (!customer) return;
+
+        // Note: For simplicity, the loading state implementation for dynamic table row buttons is omitted here 
+        // as it would require finding the button element using a unique ID generated in displayBills().
+        // If implemented, it would look like: 
+        // const btn = document.getElementById(`whatsappBtn-${customerId}-${month}`);
+        // this.setButtonLoading(btn, true, 'Sending...');
 
         // Robust Phone Number Formatting
         let phone = customer.phone.replace(/\D/g, ''); // Remove non-digits
@@ -2469,11 +2522,19 @@ ${businessName}`;
         if (!win) {
             window.location.href = whatsappUrl;
         }
+        
+        // Finalize loading state
+        // if (btn) this.setButtonLoading(btn, false, 'Remind'); 
     }
 
     async markBillPaid(customerId, month, amount) {
+        // Use the button ID for loading state
+        const button = document.getElementById(`markPaidBtn-${customerId}-${month}`);
+        
         // Replacing `confirm()` with a modal/better UI is recommended.
         if (!window.confirm(`Mark bill as paid for ${month}? Amount: ${formatCurrency(amount)}`)) return;
+        
+        this.setButtonLoading(button, true, 'Saving...');
 
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -2499,6 +2560,8 @@ ${businessName}`;
         } catch (error) {
             console.error('Error recording payment:', error);
             showError('Failed to record payment');
+        } finally {
+            this.setButtonLoading(button, false, 'Mark Paid');
         }
     }
 
@@ -2605,6 +2668,9 @@ ${businessName}`;
     async saveSettings(e) {
         e.preventDefault();
         
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        this.setButtonLoading(submitBtn, true, 'Saving Changes');
+
         const businessName = document.getElementById('settingsBusinessName').value;
         const defaultPrice = parseInt(document.getElementById('settingsDefaultPrice').value);
         const businessPhone = document.getElementById('settingsBusinessPhone').value;
@@ -2633,20 +2699,27 @@ ${businessName}`;
         } catch(error) {
             console.error(error);
             showError('Failed to save settings');
+        } finally {
+            this.setButtonLoading(submitBtn, false, 'Save Changes');
         }
     }
 
     async changePassword() {
+        const passwordBtn = document.querySelector('#settingsModal button[onclick="app.changePassword()"]');
+        this.setButtonLoading(passwordBtn, true, 'Updating Password');
+
         const newPassword = document.getElementById('newPassword').value;
         const confirmNewPassword = document.getElementById('confirmNewPassword').value;
 
         if (newPassword !== confirmNewPassword) {
             showError('Passwords do not match.');
+            this.setButtonLoading(passwordBtn, false, 'Update Password');
             return;
         }
 
         if (newPassword.length < 6) {
             showError('Password must be at least 6 characters long.');
+            this.setButtonLoading(passwordBtn, false, 'Update Password');
             return;
         }
 
@@ -2663,10 +2736,15 @@ ${businessName}`;
             } else {
                 showError('Failed to update password.');
             }
+        } finally {
+            this.setButtonLoading(passwordBtn, false, 'Update Password');
         }
     }
     
     async resendVerificationEmail() {
+        const resendBtn = document.querySelector('#verificationBanner .btn-primary');
+        this.setButtonLoading(resendBtn, true, 'Sending...');
+
         try {
             const user = auth.currentUser;
             if (user) {
@@ -2680,6 +2758,8 @@ ${businessName}`;
             } else {
                 showError('Failed to send email.');
             }
+        } finally {
+             this.setButtonLoading(resendBtn, false, 'Resend Link');
         }
     }
 
@@ -2921,6 +3001,7 @@ async function markNotificationAsRead(notificationId) {
     try {
         if (!app || !app.userId) return;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Note: Mark as read does not need a loading spinner as it's an async icon button click, feedback is the icon changing state.
         await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).update({
             read: true
         });
@@ -2932,6 +3013,7 @@ async function deleteNotification(notificationId) {
     try {
         if (!app || !app.userId) return;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Note: Delete notification does not need a loading spinner, feedback is the row disappearing.
         await db.collection('artifacts').doc(appId).collection('users').doc(app.userId).collection('notifications').doc(notificationId).delete();
         await app.loadNotifications();
     } catch (error) { console.error(error); }
