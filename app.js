@@ -2722,8 +2722,18 @@ document.addEventListener('DOMContentLoaded', function() {
     app = new AquaFlowApp();
 });
 
+// === GLOBAL EXPOSURE FOR HTML BUTTONS ===
+
 function showView(viewName) {
     if (app) app.showView(viewName);
+}
+
+function showModal(modalId) {
+    if (app) app.showModal(modalId);
+}
+
+function closeModal(modalId) {
+    if (app) app.closeModal(modalId);
 }
 
 function showAddCustomerModal() {
@@ -2736,10 +2746,6 @@ function showAddStaffModal() {
         app.updateSalaryLabel('monthly', 'monthlySalaryGroup', 'dailySalaryGroup');
         app.showModal('addStaffModal');
     }
-}
-
-function closeModal(modalId) {
-    if (app) app.closeModal(modalId);
 }
 
 function openScanner() {
