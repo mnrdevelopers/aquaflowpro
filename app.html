@@ -39,19 +39,12 @@
                 </div>
             </div>
             <div class="header-right">
-                <button class="btn btn-icon" onclick="showView('deliveries')" title="Manage Deliveries">
-                    <i class="fas fa-truck"></i>
-                </button>
+                <!-- Notifications button remains in header -->
                 <button class="btn btn-icon" onclick="showNotifications()">
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge hidden" id="notificationCount">0</span>
                 </button>
-                <button class="btn btn-icon" onclick="showSettings()">
-                    <i class="fas fa-cog"></i>
-                </button>
-                <button class="btn btn-icon" onclick="logout()" title="Logout">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
+                <!-- Deliveries and Settings moved to the Hamburger Menu Modal -->
             </div>
         </div>
     </header>
@@ -107,14 +100,16 @@
                         <i class="fas fa-user-plus"></i>
                         Add Customer
                     </button>
+                    <!-- Deliveries management added back to quick actions for easy access -->
+                    <button class="quick-action-btn" onclick="showView('deliveries')">
+                        <i class="fas fa-truck"></i>
+                        Deliveries
+                    </button>
                     <button class="quick-action-btn" onclick="showView('staff')">
                         <i class="fas fa-user-tie"></i>
                         Manage Staff
                     </button>
-                    <button class="quick-action-btn" onclick="showView('billing')">
-                        <i class="fas fa-file-invoice"></i>
-                        Generate Bills
-                    </button>
+                    <!-- Billing moved to Hamburger Menu, replaced with quick Reports access here -->
                     <button class="quick-action-btn" onclick="showView('reports')">
                         <i class="fas fa-chart-bar"></i>
                         Reports
@@ -750,7 +745,7 @@
     </div>
 
 
-   <!-- QR Scanner Modal -->
+   <!-- QR Scanner Modal (Updated) -->
 <div id="scannerModal" class="modal hidden">
     <div class="modal-content scanner-modal">
         <div class="modal-header">
@@ -786,8 +781,9 @@
                     <button class="btn btn-success" onclick="confirmDelivery()">
                         <i class="fas fa-check"></i> Confirm Delivery
                     </button>
-                    <button class="btn btn-secondary" onclick="resetScanner()">
-                        <i class="fas fa-redo"></i> Scan Again
+                    <!-- NEW: Back button to easily go back to scanner view -->
+                    <button class="btn btn-secondary" onclick="app.showScanView()" title="Scan Again/Go Back">
+                        <i class="fas fa-arrow-left"></i> Go Back
                     </button>
                 </div>
             </div>
@@ -871,6 +867,42 @@
             </div>
         </div>
     </div>
+    
+    <!-- NEW: Main Menu Modal (Hamburger Menu Content) -->
+    <div id="mainMenuModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 350px; padding: 0;">
+            <div class="modal-header" style="border-bottom: none;">
+                <h3 style="margin: 0;">Main Menu</h3>
+                <button class="btn btn-close" onclick="closeModal('mainMenuModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="menu-list" style="padding: 10px;">
+                 <button class="nav-item" onclick="closeModal('mainMenuModal'); showView('deliveries');" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
+                    <i class="fas fa-truck"></i>
+                    <span>Manage Deliveries</span>
+                </button>
+                <button class="nav-item" onclick="closeModal('mainMenuModal'); showView('billing');" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Billing & Payments</span>
+                </button>
+                <button class="nav-item" onclick="closeModal('mainMenuModal'); showView('reports');" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Business Reports</span>
+                </button>
+                 <button class="nav-item" onclick="closeModal('mainMenuModal'); showSettings();" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px;">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </button>
+                <button class="nav-item" onclick="logout()" style="flex-direction: row; justify-content: flex-start; width: 100%; margin-bottom: 5px; color: var(--danger);">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
@@ -896,9 +928,10 @@
             <span>Staff</span>
         </button>
         
-        <button class="nav-item" onclick="showView('reports')">
-            <i class="fas fa-chart-bar"></i>
-            <span>Reports</span>
+        <!-- NEW: Hamburger Menu Button -->
+        <button class="nav-item" onclick="showModal('mainMenuModal')">
+            <i class="fas fa-bars"></i>
+            <span>Menu</span>
         </button>
     </nav>
 
