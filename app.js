@@ -2159,6 +2159,16 @@ hideLoading() {
         const qrReader = document.getElementById('qrReader');
         if (qrReader) qrReader.classList.add('hidden');
     }
+    
+    // NEW: Side Menu Functions
+    openSideMenu() {
+        document.getElementById('sideMenuContainer').classList.add('open');
+    }
+
+    closeSideMenu() {
+        document.getElementById('sideMenuContainer').classList.remove('open');
+    }
+
 
     showView(viewName) {
         document.querySelectorAll('.view').forEach(view => {
@@ -2179,13 +2189,15 @@ hideLoading() {
         // Activate the corresponding nav item for the main views
         let navItem = document.querySelector(`.bottom-nav .nav-item[onclick="showView('${viewName}')"]`);
 
-        // Handle case where view is in the hamburger menu (e.g., 'billing')
+        // Handle case where view is not in the primary navigation
         if (!navItem) {
-            // No direct button, use dashboard as the active nav for other menu views
-            if (viewName === 'billing' || viewName === 'reports' || viewName === 'deliveries') {
+            // For menu items that are now in the sidebar, we keep the dashboard button active if coming from a non-main view
+            if (viewName === 'billing' || viewName === 'reports') {
                  navItem = document.querySelector(`.bottom-nav .nav-item[onclick="showView('dashboard')"]`);
             }
         }
+        
+        // Deliveries is now a main nav item, so it should be handled by the first selector.
 
         if (navItem) {
             navItem.classList.add('active');
