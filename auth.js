@@ -153,7 +153,8 @@ class AuthManager {
     e.preventDefault();
     
     const submitBtn = e.target.querySelector('button[type="submit"]');
-    this.setButtonLoading(submitBtn, true, '<i class="fas fa-sign-in-alt"></i> Sign In');
+    // NOTE: Using raw text here for mobile visibility when spinner is active
+    this.setButtonLoading(submitBtn, true, 'Sign In');
     
     // Perform full form validation before submitting
     const inputs = document.querySelectorAll('#loginForm input[required]');
@@ -187,7 +188,8 @@ class AuthManager {
         const submitBtn = e.target.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;
 
-        this.setButtonLoading(submitBtn, true, '<i class="fas fa-paper-plane"></i> Sending...');
+        // NOTE: Using raw text here for mobile visibility when spinner is active
+        this.setButtonLoading(submitBtn, true, 'Sending...');
         
         const emailInput = document.getElementById('resetEmail');
         const email = emailInput.value;
@@ -222,7 +224,8 @@ class AuthManager {
         e.preventDefault();
         
         const submitBtn = document.getElementById('signupBtn');
-        this.setButtonLoading(submitBtn, true, '<i class="fas fa-user-plus"></i> Creating Account...');
+        // NOTE: Using raw text here for mobile visibility when spinner is active
+        this.setButtonLoading(submitBtn, true, 'Creating Account...');
 
         // Perform full form validation before submitting
         const inputs = document.querySelectorAll('#signupForm input[required]');
@@ -259,28 +262,31 @@ class AuthManager {
         };
         
         try {
-            // Create user account
+            // 1. Create user account
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
             
-            // Send Email Verification Link
+            // 2. Save User Data to Firestore (CRITICAL STEP)
+            try {
+                // Write own user document using STRICT PATH rule
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
+            } catch (firestoreError) {
+                console.error('Firestore write error during signup:', firestoreError);
+                
+                // Rollback: Delete the auth user if Firestore write fails
+                await user.delete().catch(e => console.error("Failed to rollback auth user:", e));
+                
+                throw new Error('Failed to create user profile. Please check database connection/rules.');
+            }
+            
+            // 3. Send Email Verification Link (Non-critical)
             try {
                 await user.sendEmailVerification();
             } catch (emailError) {
-                console.error('Error sending verification email:', emailError);
+                console.warn('Error sending verification email:', emailError);
             }
 
-            // Save User Data
-            try {
-                // Write own user document using STRICT PATH
-                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set(userData);
-            } catch (firestoreError) {
-                console.error('Firestore write error:', firestoreError);
-                await user.delete(); // Rollback
-                throw new Error('Failed to create profile. Database error.');
-            }
-
-            showSuccess('Business account created!');
+            showSuccess('Business account created! Please check your email for verification.');
             // Redirect handled by listener
             
         } catch (error) {
@@ -299,7 +305,15 @@ class AuthManager {
             button.disabled = true;
             // Store original content before overwriting
             button.setAttribute('data-original-html', button.innerHTML);
-            button.innerHTML = `<span class="btn-spinner"><i class="spinner-border"></i></span><span style="visibility: hidden">${originalText || 'Processing...'}</span>`;
+            // Use raw text for accessibility/mobile clarity when obscured
+            const displayText = originalText.replace(/<[^>]*>?/gm, ''); 
+            
+            button.innerHTML = `
+                <span class="btn-spinner">
+                    <div class="spinner-border" role="status"></div>
+                </span>
+                <span style="visibility: hidden;">${displayText}</span>
+            `;
         } else {
             button.classList.remove('is-loading');
             button.disabled = false;
@@ -381,6 +395,7 @@ class AuthManager {
         try {
             // Find the logout button if on app.html/index.html to apply loading state
             const logoutButton = document.querySelector('.menu-logout .btn-danger'); 
+            // NOTE: Using raw text here for mobile visibility when spinner is active
             this.setButtonLoading(logoutButton, true, 'Signing Out');
 
             await auth.signOut();
