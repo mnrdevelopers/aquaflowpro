@@ -1079,8 +1079,6 @@ textarea.form-input {
 
 .bill-actions .btn {
     flex: 1;
-    padding: var(--space-sm);
-    font-size: 0.8rem;
 }
 
 /* Reports */
@@ -1425,6 +1423,72 @@ textarea.form-input {
     opacity: 0.6;
     pointer-events: none;
 }
+
+/* --- BUTTON LOADING SPINNER STYLES (NEW) --- */
+
+/* Base button class when loading */
+.btn.is-loading {
+    /* Prevent text wrap on spinner */
+    white-space: nowrap; 
+    /* Disable click events on the button */
+    pointer-events: none;
+    /* Reduce opacity slightly to indicate disabled state */
+    opacity: 0.8; 
+}
+
+/* Hide button text/icons when loading */
+.btn.is-loading > *:not(.btn-spinner) {
+    visibility: hidden;
+}
+
+/* Spinner container style */
+.btn-spinner {
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+}
+
+/* Show spinner when loading */
+.btn.is-loading .btn-spinner {
+    display: block;
+}
+
+/* The actual spinner animation */
+.spinner-border {
+    display: inline-block;
+    width: 1.25rem;
+    height: 1.25rem;
+    vertical-align: text-bottom;
+    border: 0.25em solid currentColor;
+    border-right-color: transparent; /* Makes it spin */
+    border-radius: 50%;
+    animation: spinner-border 0.75s linear infinite;
+    color: inherit; /* Inherit color from button text */
+}
+
+/* Ensure spinner color is white for primary/success/danger buttons */
+.btn-primary .spinner-border,
+.btn-success .spinner-border,
+.btn-danger .spinner-border {
+    color: var(--white);
+}
+
+/* Ensure spinner color is dark for secondary/outline buttons */
+.btn-secondary .spinner-border,
+.btn-outline .spinner-border {
+    color: var(--gray-700);
+}
+
+@keyframes spinner-border {
+    to { transform: rotate(360deg); }
+}
+
+/* --- END BUTTON LOADING SPINNER STYLES --- */
+
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
