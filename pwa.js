@@ -267,15 +267,31 @@ class PWAHandler {
         if (notification) notification.remove();
     }
 
-    updateApp() {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready.then(registration => {
+   updateApp() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+            // Send skip waiting message
+            if (registration.waiting) {
                 registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                window.location.reload();
-            });
-        }
+                
+                // Listen for the controller change to reload the page
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    console.log('Controller changed, reloading page...');
+                    window.location.reload();
+                });
+                
+                // Fallback: if controller doesn't change within 3 seconds, reload anyway
+                setTimeout(() => {
+                    if (!navigator.serviceWorker.controller) {
+                        console.log('Force reloading after timeout...');
+                        window.location.reload();
+                    }
+                }, 3000);
+            }
+        });
     }
-
+}
+    
     // Request notification permission
     async requestNotificationPermission() {
         if ('Notification' in window && Notification.permission === 'default') {
