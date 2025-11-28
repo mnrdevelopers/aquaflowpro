@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Portal - AquaFlow Pro</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💧</text></svg>">
+    <meta name="theme-color" content="#0C2B4E">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-remote-config-compat.js"></script>
+</head>
+<body class="app-page">
+    
+    <!-- Portal Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="header-left">
+                <button class="btn btn-back" onclick="window.location.href='index.html'">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div class="business-info">
+                    <h1>Customer Portal</h1>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-sm btn-outline" onclick="logoutCustomer()" id="logoutBtn" style="display: none;">
+                    <i class="fas fa-sign-out-alt"></i> Exit
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- Login Section -->
+        <section id="loginSection" class="auth-container" style="margin-top: 2rem; max-width: 400px; margin-left: auto; margin-right: auto;">
+            <div class="text-center mb-4">
+                <div class="logo-icon" style="margin: 0 auto 1rem; width: 60px; height: 60px; font-size: 1.5rem;">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <h3>Track Your Orders</h3>
+                <p class="text-muted">Enter your registered phone number to view your delivery history and bills.</p>
+            </div>
+            
+            <form id="customerLoginForm" onsubmit="handleCustomerLogin(event)">
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <div class="input-group">
+                        <i class="fas fa-phone" style="position: absolute; left: 15px; top: 45px; color: var(--primary-light);"></i>
+                        <input type="tel" id="portalPhone" class="form-input" style="padding-left: 40px;" placeholder="e.g. 9876543210" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-search"></i> View My Details
+                </button>
+            </form>
+        </section>
+
+        <!-- Loading State -->
+        <div id="portalLoader" class="loading-overlay hidden">
+            <div class="loader-container">
+                <div class="loader"></div>
+                <p>Fetching your records...</p>
+            </div>
+        </div>
+
+        <!-- Dashboard Section (Hidden by default) -->
+        <section id="dashboardSection" class="hidden">
+            
+            <!-- Supplier Info Card -->
+            <div class="stat-card" style="background: var(--gradient-primary); color: white; margin-bottom: 1.5rem;">
+                <div class="stat-content">
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Serving Water Plant</div>
+                    <h2 id="supplierName" style="font-size: 1.5rem; margin: 5px 0;">-</h2>
+                    <div id="supplierPhone" style="font-size: 0.9rem; opacity: 0.9;"> <i class="fas fa-phone"></i> -</div>
+                </div>
+                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
+                    <i class="fas fa-building"></i>
+                </div>
+            </div>
+
+            <!-- Customer Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-number" id="totalDue" style="color: var(--danger);">₹0</div>
+                        <div class="stat-label">Total Outstanding</div>
+                    </div>
+                    <div class="stat-icon" style="background: var(--danger);">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-number" id="lastDelivery">-</div>
+                        <div class="stat-label">Last Delivery</div>
+                    </div>
+                    <div class="stat-icon" style="background: var(--success);">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="auth-tabs" style="margin-bottom: 1rem;">
+                <button class="tab-btn active" onclick="switchTab('deliveries')">
+                    <i class="fas fa-truck"></i> Deliveries
+                </button>
+                <button class="tab-btn" onclick="switchTab('payments')">
+                    <i class="fas fa-rupee-sign"></i> Payments & Bills
+                </button>
+            </div>
+
+            <!-- Deliveries View -->
+            <div id="deliveriesTab" class="portal-tab-content">
+                <h3 style="margin-bottom: 1rem; color: var(--primary-dark);">Delivery History</h3>
+                <div id="deliveriesList">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+
+            <!-- Payments View -->
+            <div id="paymentsTab" class="portal-tab-content hidden">
+                <h3 style="margin-bottom: 1rem; color: var(--primary-dark);">Payment History</h3>
+                <div class="payment-summary-card mb-4" style="background: var(--gray-50); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--success);">
+                    <h4 style="margin-bottom: 0.5rem;">Payment Summary</h4>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Total Billed Value:</span>
+                        <strong id="summaryTotalBilled">₹0</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Total Paid:</span>
+                        <strong id="summaryTotalPaid" class="text-success">₹0</strong>
+                    </div>
+                </div>
+                <div id="paymentsList">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Firebase Config -->
+    <script src="firebase-config.js"></script>
+
+    <script>
+        // DOM Elements
+        const loginSection = document.getElementById('loginSection');
+        const dashboardSection = document.getElementById('dashboardSection');
+        const loader = document.getElementById('portalLoader');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        // State
+        let currentBusinessId = null;
+        let currentCustomerId = null;
+        let customerData = null;
+
+        // Check if previously logged in
+        document.addEventListener('DOMContentLoaded', () => {
+            const storedPhone = localStorage.getItem('portalPhone');
+            if (storedPhone) {
+                document.getElementById('portalPhone').value = storedPhone;
+                fetchCustomerData(storedPhone);
+            }
+        });
+
+        async function handleCustomerLogin(e) {
+            e.preventDefault();
+            const phone = document.getElementById('portalPhone').value.trim();
+            if(phone.length < 10) {
+                alert("Please enter a valid phone number");
+                return;
+            }
+            await fetchCustomerData(phone);
+        }
+
+        async function fetchCustomerData(phone) {
+            showLoader();
+            
+            try {
+                // 1. Find Customer Document
+                // We use collectionGroup to find the customer across all businesses
+                const customerSnapshot = await db.collectionGroup('customers')
+                    .where('phone', '==', phone)
+                    .limit(1)
+                    .get();
+
+                if (customerSnapshot.empty) {
+                    hideLoader();
+                    alert('No customer found with this phone number. Please check with your water supplier.');
+                    localStorage.removeItem('portalPhone');
+                    return;
+                }
+
+                const customerDoc = customerSnapshot.docs[0];
+                customerData = customerDoc.data();
+                currentCustomerId = customerDoc.id;
+                
+                // 2. Identify Business Owner (Parent of the customer collection)
+                // Path structure: artifacts/{appId}/users/{userId}/customers/{customerId}
+                const businessDocRef = customerDoc.ref.parent.parent;
+                currentBusinessId = businessDocRef.id;
+
+                // 3. Store login session
+                localStorage.setItem('portalPhone', phone);
+
+                // 4. Fetch All Required Data in Parallel
+                await Promise.all([
+                    fetchBusinessDetails(businessDocRef),
+                    fetchDeliveries(businessDocRef),
+                    fetchPayments(businessDocRef)
+                ]);
+
+                // 5. Update UI
+                updateUI();
+                
+                loginSection.classList.add('hidden');
+                dashboardSection.classList.remove('hidden');
+                logoutBtn.style.display = 'block';
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                alert("An error occurred while fetching your data. Please try again.");
+            } finally {
+                hideLoader();
+            }
+        }
+
+        async function fetchBusinessDetails(businessDocRef) {
+            const doc = await businessDocRef.get();
+            if (doc.exists) {
+                const data = doc.data();
+                document.getElementById('supplierName').textContent = data.businessName || 'Water Service Provider';
+                document.getElementById('supplierPhone').innerHTML = `<i class="fas fa-phone"></i> ${data.businessPhone || 'Contact Provider'}`;
+            }
+        }
+
+        let allDeliveries = [];
+        let allPayments = [];
+
+        async function fetchDeliveries(businessDocRef) {
+            const snapshot = await businessDocRef.collection('deliveries')
+                .where('customerId', '==', currentCustomerId)
+                .orderBy('timestamp', 'desc')
+                .limit(100)
+                .get();
+            
+            allDeliveries = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                date: doc.data().timestamp ? new Date(doc.data().timestamp.seconds * 1000) : new Date()
+            }));
+        }
+
+        async function fetchPayments(businessDocRef) {
+            const snapshot = await businessDocRef.collection('payments')
+                .where('customerId', '==', currentCustomerId)
+                .orderBy('paidAt', 'desc')
+                .limit(50)
+                .get();
+            
+            allPayments = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                date: doc.data().paidAt ? new Date(doc.data().paidAt.seconds * 1000) : new Date()
+            }));
+        }
+
+        function updateUI() {
+            // Calculate Stats
+            const pricePerCan = customerData.pricePerCan || 20; // Fallback price if not set
+            let totalCost = 0;
+            
+            // Deliveries List
+            const deliveriesList = document.getElementById('deliveriesList');
+            if (allDeliveries.length === 0) {
+                deliveriesList.innerHTML = '<div class="empty-state"><p>No deliveries found.</p></div>';
+                document.getElementById('lastDelivery').textContent = 'None';
+            } else {
+                // Set Last Delivery
+                const last = allDeliveries[0];
+                document.getElementById('lastDelivery').textContent = `${last.quantity} Can(s) on ${last.date.toLocaleDateString()}`;
+
+                deliveriesList.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr><th>Date</th><th>Qty</th><th>Cost</th></tr></thead>
+                            <tbody>
+                                ${allDeliveries.map(d => {
+                                    const cost = (d.quantity || 1) * pricePerCan;
+                                    totalCost += cost;
+                                    return `
+                                    <tr>
+                                        <td>${d.date.toLocaleDateString()} <br><small class="text-muted">${d.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</small></td>
+                                        <td><strong>${d.quantity}</strong></td>
+                                        <td>₹${cost}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+            }
+
+            // Calculate Payments
+            let totalPaid = 0;
+            const paymentsList = document.getElementById('paymentsList');
+            
+            if (allPayments.length === 0) {
+                paymentsList.innerHTML = '<div class="empty-state"><p>No payments recorded.</p></div>';
+            } else {
+                paymentsList.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr><th>Date</th><th>Amount</th><th>Method</th></tr></thead>
+                            <tbody>
+                                ${allPayments.map(p => {
+                                    totalPaid += (p.amount || 0);
+                                    return `
+                                    <tr>
+                                        <td>${p.date.toLocaleDateString()}</td>
+                                        <td class="text-success fw-bold">₹${p.amount}</td>
+                                        <td>${p.method || 'Cash'}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+            }
+
+            // Update Summary Stats
+            const outstanding = totalCost - totalPaid;
+            const totalDueEl = document.getElementById('totalDue');
+            
+            totalDueEl.textContent = `₹${outstanding}`;
+            totalDueEl.style.color = outstanding > 0 ? 'var(--danger)' : 'var(--success)';
+            if (outstanding <= 0) totalDueEl.textContent = "Paid ✓";
+
+            document.getElementById('summaryTotalBilled').textContent = `₹${totalCost}`;
+            document.getElementById('summaryTotalPaid').textContent = `₹${totalPaid}`;
+        }
+
+        // Tab Switching
+        window.switchTab = function(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.portal-tab-content').forEach(content => content.classList.add('hidden'));
+            
+            // Find active tab button (approximate match)
+            const buttons = document.querySelectorAll('.tab-btn');
+            if (tabName === 'deliveries') buttons[0].classList.add('active');
+            if (tabName === 'payments') buttons[1].classList.add('active');
+
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+        };
+
+        window.logoutCustomer = function() {
+            localStorage.removeItem('portalPhone');
+            location.reload();
+        };
+
+        function showLoader() { loader.classList.remove('hidden'); }
+        function hideLoader() { loader.classList.add('hidden'); }
+
+    </script>
+</body>
+</html>
