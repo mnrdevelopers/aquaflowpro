@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AquaFlow Pro - Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0C2B4E"> <!-- Updated theme color -->
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="AquaFlow Pro">
 <meta name="msapplication-TileColor" content="#0C2B4E"> <!-- Updated tile color -->
 <meta name="msapplication-TileImage" content="android/android-launchericon-144-144.png">
@@ -339,11 +339,10 @@
     </main>
 
     <!-- Loading Overlay -->
-<div id="loadingOverlay" class="loading-overlay">
+<div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loader-container">
         <div class="loader"></div>
         <p>Loading your data...</p>
-        <button onclick="document.getElementById('loadingOverlay').classList.add('hidden')" style="margin-top:15px; background:none; border:none; color:var(--danger); font-size:0.8rem; text-decoration:underline;">Force Close (If Stuck)</button>
     </div>
 </div>
 
@@ -1035,17 +1034,6 @@ function startLiveClock() {
     setInterval(update, 1000);
     update();
 }
-
-// Force-hide the loading screen after a timeout just in case it gets stuck on mobile
-window.addEventListener('load', function() {
-    setTimeout(function() {
-        const overlay = document.getElementById('loadingOverlay');
-        if (overlay && !overlay.classList.contains('hidden')) {
-            console.warn('Force hiding loading overlay after timeout');
-            overlay.classList.add('hidden');
-        }
-    }, 8000); // 8 second failsafe
-});
 
 document.addEventListener('DOMContentLoaded', startLiveClock);
 </script>
