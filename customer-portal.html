@@ -29,9 +29,12 @@
                     <h1>Customer Portal</h1>
                 </div>
             </div>
-            <div class="header-right">
-                <button class="btn btn-sm btn-outline" onclick="logoutCustomer()" id="logoutBtn" style="display: none;">
-                    <i class="fas fa-sign-out-alt"></i> Exit
+            <div class="header-right" id="portalHeaderActions" style="display: none; gap: 8px;">
+                <button class="btn btn-icon" title="Notifications">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <button class="btn btn-icon" onclick="logoutCustomer()" title="Logout" style="color: var(--danger); border-color: var(--danger);">
+                    <i class="fas fa-sign-out-alt"></i>
                 </button>
             </div>
         </div>
@@ -181,7 +184,7 @@
         const loginSection = document.getElementById('loginSection');
         const dashboardSection = document.getElementById('dashboardSection');
         const loader = document.getElementById('portalLoader');
-        const logoutBtn = document.getElementById('logoutBtn');
+        const headerActions = document.getElementById('portalHeaderActions');
         const phoneForm = document.getElementById('phoneForm');
         const otpForm = document.getElementById('otpForm');
         const loginSubtext = document.getElementById('loginSubtext');
@@ -249,7 +252,7 @@
                     loginSubtext.textContent = `OTP sent to ${phoneInput}`;
                     
                     // 4. SHOW OTP IN ALERT (Simulation)
-                    alert(`[SMS]\n\nYour Verification Code is: ${generatedOtp}\n\n(Enter this OTP to Login)`);
+                    alert(`[DEMO SMS]\n\nYour Verification Code is: ${generatedOtp}\n\n(In a real app, this would come via SMS)`);
                     
                     startTimer();
                     
@@ -380,7 +383,7 @@
                 
                 loginSection.classList.add('hidden');
                 dashboardSection.classList.remove('hidden');
-                logoutBtn.style.display = 'block';
+                headerActions.style.display = 'flex'; // Show icons on login
 
             } catch (error) {
                 console.error("Error fetching data:", error);
@@ -520,8 +523,10 @@
         };
 
         window.logoutCustomer = function() {
-            localStorage.removeItem('portalSession');
-            location.reload();
+            if (confirm("Are you sure you want to log out?")) {
+                localStorage.removeItem('portalSession');
+                location.reload();
+            }
         };
 
         function showLoader(text = "Loading...") { 
