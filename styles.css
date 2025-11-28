@@ -2256,3 +2256,33 @@ textarea.form-input {
         inset: 0 35px 35px 0;
     }
 }
+
+/* --- NEW: Google Nav Icon Animation --- */
+@keyframes google-pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.4); }
+    50% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(66, 133, 244, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
+}
+
+.google-nav-icon {
+    color: #DB4437; /* Google Red */
+    background: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    animation: google-pulse 2s infinite;
+    margin-right: 8px;
+    font-size: 1rem;
+    border: 1px solid #eee;
+}
+
+/* --- NEW: Input Highlighting for Setup --- */
+.highlight-input {
+    border-color: var(--warning) !important;
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3) !important;
+    transition: all 0.3s ease;
+}
