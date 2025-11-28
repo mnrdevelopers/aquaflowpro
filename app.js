@@ -106,6 +106,35 @@ class AquaFlowApp {
              this.userData = { businessName: 'AquaFlow Pro', defaultPrice: 20 };
         }
         
+        // NEW: Check for first-time Google Sign In to show setup modal
+        if (sessionStorage.getItem('showProfileSetup') === 'true') {
+            sessionStorage.removeItem('showProfileSetup'); // Clear flag so it doesn't show again on reload
+            setTimeout(() => {
+                this.showModal('settingsModal');
+                showSuccess('Welcome! Please update your Business details to complete setup.');
+                
+                // Highlight the critical inputs
+                const nameInput = document.getElementById('settingsBusinessName');
+                const phoneInput = document.getElementById('settingsBusinessPhone');
+                if (nameInput) nameInput.classList.add('highlight-input');
+                if (phoneInput) phoneInput.classList.add('highlight-input');
+            }, 1000); 
+        }
+
+        // NEW: Check if user signed in with Google to show animated icon
+        if (user.providerData.some(provider => provider.providerId === 'google.com')) {
+            const headerLeft = document.querySelector('.header-left');
+            // Check if icon already exists to prevent duplicates
+            if (headerLeft && !document.querySelector('.google-nav-icon')) {
+                const googleIcon = document.createElement('div');
+                googleIcon.className = 'google-nav-icon';
+                googleIcon.innerHTML = '<i class="fab fa-google"></i>';
+                googleIcon.title = "Signed in with Google";
+                // Insert after hamburger menu (index 1, as menu button is index 0)
+                headerLeft.insertBefore(googleIcon, headerLeft.children[1]);
+            }
+        }
+        
         return true;
     }
 
