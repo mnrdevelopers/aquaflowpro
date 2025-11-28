@@ -47,10 +47,29 @@
                     <h3>Auto Billing</h3>
                     <p>Automated monthly billing and payment tracking</p>
                 </div>
-                <div class="feature">
-                    <i class="fas fa-chart-line"></i>
-                    <h3>Business Analytics</h3>
-                    <p>Track your delivery business performance</p>
+            </div>
+
+            <!-- NEW: Customer Portal Section -->
+            <div class="customer-tracker-card">
+                <div class="tracker-header">
+                    <i class="fas fa-search-location"></i>
+                    <h3>Customer Portal</h3>
+                </div>
+                <p class="tracker-desc">Check your water delivery status</p>
+                
+                <div class="tracker-input-group">
+                    <input type="tel" id="trackingPhone" placeholder="Enter Mobile Number" maxlength="10">
+                    <button class="btn btn-success" onclick="trackCustomer()">
+                        Track
+                    </button>
+                </div>
+
+                <div id="trackingResult" class="tracking-result hidden">
+                    <!-- Results injected here -->
+                </div>
+                
+                <div id="trackingLoader" class="hidden" style="margin: 10px 0;">
+                    <i class="fas fa-circle-notch fa-spin text-white"></i> Searching...
                 </div>
             </div>
 
@@ -58,33 +77,25 @@
             <div class="action-buttons">
                 <button class="btn btn-primary btn-large" onclick="goToAuth()">
                     <i class="fas fa-rocket"></i>
-                    Start Managing Your Business
+                    Business Owner Login
                 </button>
                 <p class="login-link">
-                    Already have an account? <a href="auth.html">Sign In</a>
+                    New here? <a href="auth.html">Create Account</a>
                 </p>
             </div>
         </div>
     </div>
-
-    <!-- REMOVED: Loading Overlay from index.html -->
 
     <!-- Firebase Config & PWA Script -->
     <script src="firebase-config.js"></script>
     <script src="pwa.js"></script>
 
     <script>
-        // === NEW: Auto-Redirect Logic ===
-        // Check if user is already logged in. If so, skip landing page.
-        // No loading overlay needed on landing page
-        
+        // === Auto-Redirect Logic ===
         firebase.auth().onAuthStateChanged(function(user) {
             if (user) {
                 console.log("User already logged in, redirecting to app...");
                 window.location.href = 'app.html';
-            } else {
-                // User is not logged in, show landing page normally
-                console.log("User not logged in, showing landing page");
             }
         });
 
@@ -92,27 +103,92 @@
             window.location.href = 'auth.html';
         }
 
+        // === Customer Tracking Logic ===
+        async function trackCustomer() {
+            const phoneInput = document.getElementById('trackingPhone');
+            const resultDiv = document.getElementById('trackingResult');
+            const loader = document.getElementById('trackingLoader');
+            const phone = phoneInput.value.trim();
+
+            if (!phone || phone.length < 10) {
+                alert('Please enter a valid 10-digit mobile number');
+                return;
+            }
+
+            // UI Reset
+            resultDiv.innerHTML = '';
+            resultDiv.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            try {
+                // We use collectionGroup to search across all business users
+                // Note: This requires a composite index in Firestore if combined with other filters,
+                // but usually works for single field equality on small datasets or with simple rules.
+                const snapshot = await db.collectionGroup('customers')
+                    .where('phone', '==', phone)
+                    .limit(1)
+                    .get();
+
+                loader.classList.add('hidden');
+
+                if (snapshot.empty) {
+                    resultDiv.innerHTML = `
+                        <div class="tracker-error">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>No customer found with this number.</p>
+                        </div>
+                    `;
+                    resultDiv.classList.remove('hidden');
+                    return;
+                }
+
+                // Customer Found
+                const customerDoc = snapshot.docs[0];
+                const customerData = customerDoc.data();
+                
+                // Construct result HTML
+                const lastUpdated = customerData.updatedAt ? new Date(customerData.updatedAt.seconds * 1000).toLocaleDateString() : 'Recently';
+                
+                resultDiv.innerHTML = `
+                    <div class="tracker-success">
+                        <div class="tracker-info-row">
+                            <span>Name:</span>
+                            <strong>${customerData.name}</strong>
+                        </div>
+                        <div class="tracker-info-row">
+                            <span>Total Cans:</span>
+                            <strong>${customerData.totalCans || 0}</strong>
+                        </div>
+                        <div class="tracker-info-row">
+                            <span>Price/Can:</span>
+                            <strong>₹${customerData.pricePerCan}</strong>
+                        </div>
+                        <div class="tracker-status">
+                            <i class="fas fa-check-circle"></i> Active Customer
+                        </div>
+                    </div>
+                `;
+                resultDiv.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Tracking Error:", error);
+                loader.classList.add('hidden');
+                resultDiv.innerHTML = `
+                    <div class="tracker-error">
+                        <p>Error searching. Please try again later.</p>
+                    </div>
+                `;
+                resultDiv.classList.remove('hidden');
+            }
+        }
+
         if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'SW_UPDATED') {
-            console.log('Service Worker updated, reloading page...');
-            showSuccess('App updated successfully! Reloading...');
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'SW_UPDATED') {
+                    window.location.reload();
+                }
+            });
         }
-    });
-    
-    // Listen for controller change (alternative method)
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Controller changed, checking if reload is needed...');
-        // Only reload if we're not already in the process of reloading
-        if (!window.location.hash.includes('reloading')) {
-            window.location.hash = 'reloading';
-            window.location.reload();
-        }
-    });
-}
     </script>
 </body>
 </html>
