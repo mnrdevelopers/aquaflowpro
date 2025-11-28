@@ -77,14 +77,17 @@
                 <button class="btn btn-icon" onclick="app.openSideMenu()" title="Main Menu">
                     <i class="fas fa-bars"></i>
                 </button>
-                <div class="business-info">
-                    <h1 id="businessName">AquaFlow Pro</h1>
-                    <span class="status-online" id="connectionStatus">
-                        <i class="fas fa-circle"></i> Online
-                    </span>
+                <div class="business-info" style="display: flex; flex-direction: column; justify-content: center; align-items: flex-start;">
+                    <div id="liveGreeting" style="font-size: 0.75rem; font-weight: 600; color: var(--primary); line-height: 1;">Welcome</div>
+                    <h1 id="businessName" style="margin: 2px 0; font-size: 1.1rem; line-height: 1.2;">AquaFlow Pro</h1>
+                    <div id="liveDateTime" style="font-size: 0.65rem; color: var(--gray-600); font-weight: 500; font-family: monospace;">Loading...</div>
                 </div>
             </div>
-            <div class="header-right">
+            <div class="header-right" style="align-items: center;">
+                <!-- Status Dot (Moved here for better layout) -->
+                <span class="status-online" id="connectionStatus" style="margin-right: 5px; font-size: 0.7rem; padding: 2px 6px;">
+                    <i class="fas fa-circle" style="font-size: 0.5rem;"></i> Online
+                </span>
                 <!-- Notifications button remains in header -->
                 <button class="btn btn-icon" onclick="showNotifications()">
                     <i class="fas fa-bell"></i>
@@ -993,6 +996,46 @@ function confirmLogout() {
         logout();
     }
 }
+
+// NEW: Live Clock & Greeting
+function startLiveClock() {
+    const dateEl = document.getElementById('liveDateTime');
+    const greetingEl = document.getElementById('liveGreeting');
+    
+    function update() {
+        const now = new Date();
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        // Date Time: "Fri, Nov 28 • 4:58:30 PM"
+        let hours = now.getHours();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const seconds = now.getSeconds().toString().padStart(2, '0');
+        
+        const dateStr = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}`;
+        const timeStr = `${hours}:${minutes}:${seconds} ${ampm}`;
+        
+        if(dateEl) dateEl.textContent = `${dateStr} • ${timeStr}`;
+        
+        // Greeting
+        const hour = now.getHours();
+        let greeting = "Welcome";
+        if (hour >= 5 && hour < 12) greeting = "Good Morning ☀️";
+        else if (hour >= 12 && hour < 17) greeting = "Good Afternoon 🌤️";
+        else if (hour >= 17 && hour < 22) greeting = "Good Evening 🌇";
+        else greeting = "Good Night 🌙";
+        
+        if(greetingEl) greetingEl.textContent = greeting;
+    }
+    
+    setInterval(update, 1000);
+    update();
+}
+
+document.addEventListener('DOMContentLoaded', startLiveClock);
 </script>
     
 </body>
