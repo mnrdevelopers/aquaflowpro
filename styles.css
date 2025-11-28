@@ -126,6 +126,47 @@ body {
     color: var(--gray-700);
 }
 
+/* --- GOOGLE BUTTON STYLE --- */
+.btn-google {
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    color: var(--gray-700);
+    width: 100%;
+    margin-top: var(--space-md);
+    transition: all 0.2s ease;
+}
+
+.btn-google:hover {
+    background-color: var(--gray-50);
+    border-color: var(--gray-400);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-google i {
+    color: #DB4437; /* Google Red Brand Color */
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: var(--space-lg) 0;
+    color: var(--gray-500);
+    font-size: 0.9rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--gray-300);
+}
+
+.auth-divider span {
+    padding: 0 var(--space-md);
+}
+/* --- END GOOGLE BUTTON STYLE --- */
+
 .btn-block {
     width: 100%;
 }
