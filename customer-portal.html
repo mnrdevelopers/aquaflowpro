@@ -44,29 +44,56 @@
                 <div class="logo-icon" style="margin: 0 auto 1rem; width: 60px; height: 60px; font-size: 1.5rem;">
                     <i class="fas fa-user-circle"></i>
                 </div>
-                <h3>Track Your Orders</h3>
-                <p class="text-muted">Enter your registered phone number to view your delivery history and bills.</p>
+                <h3>Secure Login</h3>
+                <p class="text-muted" id="loginSubtext">Enter your mobile number to receive a One-Time Password (OTP).</p>
             </div>
             
-            <form id="customerLoginForm" onsubmit="handleCustomerLogin(event)">
+            <!-- Step 1: Phone Number -->
+            <form id="phoneForm" onsubmit="requestOtp(event)">
                 <div class="form-group">
                     <label>Phone Number</label>
                     <div class="input-group">
                         <i class="fas fa-phone" style="position: absolute; left: 15px; top: 45px; color: var(--primary-light);"></i>
-                        <input type="tel" id="portalPhone" class="form-input" style="padding-left: 40px;" placeholder="e.g. 9876543210" required>
+                        <span style="position: absolute; left: 40px; top: 46px; color: var(--gray-600); font-weight: bold;">+91</span>
+                        <input type="tel" id="portalPhone" class="form-input" style="padding-left: 75px;" placeholder="9876543210" maxlength="10" required>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">
-                    <i class="fas fa-search"></i> View My Details
+                <!-- Invisible Recaptcha Container -->
+                <div id="recaptcha-container"></div>
+                
+                <button type="submit" class="btn btn-primary btn-block" id="getOtpBtn">
+                    Get OTP <i class="fas fa-arrow-right"></i>
                 </button>
             </form>
+
+            <!-- Step 2: OTP Entry (Hidden initially) -->
+            <form id="otpForm" class="hidden" onsubmit="verifyOtp(event)">
+                <div class="form-group">
+                    <label>Enter Verification Code</label>
+                    <div class="input-group">
+                        <i class="fas fa-key" style="position: absolute; left: 15px; top: 45px; color: var(--primary-light);"></i>
+                        <input type="text" id="otpInput" class="form-input" style="padding-left: 40px; letter-spacing: 5px; font-weight: bold; font-size: 1.2rem; text-align: center;" placeholder="XXXXXX" maxlength="6" required>
+                    </div>
+                    <div style="text-align: right; margin-top: 10px;">
+                        <span id="timer" class="text-muted" style="font-size: 0.85rem;">Resend in 30s</span>
+                        <a href="#" id="resendLink" onclick="resendOtp()" style="font-size: 0.85rem; color: var(--primary); display: none;">Resend OTP</a>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success btn-block" id="verifyBtn">
+                    Verify & Login <i class="fas fa-check"></i>
+                </button>
+                <button type="button" class="btn btn-text btn-block" onclick="resetLogin()" style="margin-top: 10px;">
+                    Change Phone Number
+                </button>
+            </form>
+
         </section>
 
         <!-- Loading State -->
         <div id="portalLoader" class="loading-overlay hidden">
             <div class="loader-container">
                 <div class="loader"></div>
-                <p>Fetching your records...</p>
+                <p id="loaderText">Fetching your records...</p>
             </div>
         </div>
 
@@ -157,36 +184,191 @@
         const dashboardSection = document.getElementById('dashboardSection');
         const loader = document.getElementById('portalLoader');
         const logoutBtn = document.getElementById('logoutBtn');
+        const phoneForm = document.getElementById('phoneForm');
+        const otpForm = document.getElementById('otpForm');
+        const loginSubtext = document.getElementById('loginSubtext');
 
         // State
         let currentBusinessId = null;
         let currentCustomerId = null;
         let customerData = null;
+        
+        // Auth State
+        window.recaptchaVerifier = null;
+        window.confirmationResult = null;
 
-        // Check if previously logged in
+        // Check if previously logged in via Firebase Auth persistence
         document.addEventListener('DOMContentLoaded', () => {
-            const storedPhone = localStorage.getItem('portalPhone');
-            if (storedPhone) {
-                document.getElementById('portalPhone').value = storedPhone;
-                fetchCustomerData(storedPhone);
-            }
+            // Initialize ReCaptcha on load
+            setupRecaptcha();
+
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    // User is signed in.
+                    console.log("Auto-login detected for:", user.phoneNumber);
+                    // Extract local phone number part (remove +91)
+                    let phone = user.phoneNumber.replace('+91', '');
+                    fetchCustomerData(phone);
+                } else {
+                    // No user is signed in.
+                    loginSection.classList.remove('hidden');
+                }
+            });
         });
 
-        async function handleCustomerLogin(e) {
-            e.preventDefault();
-            const phone = document.getElementById('portalPhone').value.trim();
-            if(phone.length < 10) {
-                alert("Please enter a valid phone number");
-                return;
+        // --- Real Firebase Phone Auth Logic ---
+
+        function setupRecaptcha() {
+            if (!window.recaptchaVerifier) {
+                window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                    'size': 'invisible',
+                    'callback': (response) => {
+                        // reCAPTCHA solved, allow signInWithPhoneNumber.
+                        console.log("Recaptcha solved");
+                    }
+                });
             }
-            await fetchCustomerData(phone);
         }
 
+        async function requestOtp(e) {
+            e.preventDefault();
+            const phoneInput = document.getElementById('portalPhone').value.trim();
+            const getOtpBtn = document.getElementById('getOtpBtn');
+            
+            if(phoneInput.length !== 10) {
+                alert("Please enter a valid 10-digit phone number");
+                return;
+            }
+
+            // Disable button
+            getOtpBtn.disabled = true;
+            getOtpBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sending...';
+
+            const phoneNumber = "+91" + phoneInput;
+            const appVerifier = window.recaptchaVerifier;
+
+            try {
+                // 1. Send SMS
+                window.confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, appVerifier);
+                
+                // 2. Switch UI
+                phoneForm.classList.add('hidden');
+                otpForm.classList.remove('hidden');
+                loginSubtext.textContent = `OTP sent to ${phoneNumber}`;
+                startTimer();
+
+            } catch (error) {
+                console.error("SMS Error:", error);
+                
+                // Handle specific errors
+                if (error.code === 'auth/invalid-phone-number') {
+                    alert('The phone number is invalid.');
+                } else if (error.code === 'auth/quota-exceeded') {
+                    alert('SMS quota exceeded. Please try again later.');
+                } else if (error.code === 'auth/captcha-check-failed') {
+                    alert('Recaptcha verification failed. Please refresh the page.');
+                } else {
+                    alert("Error sending OTP: " + error.message);
+                }
+                
+                // Reset ReCaptcha so user can try again
+                if(window.recaptchaVerifier) {
+                    window.recaptchaVerifier.render().then(widgetId => {
+                        grecaptcha.reset(widgetId);
+                    });
+                }
+            } finally {
+                getOtpBtn.disabled = false;
+                getOtpBtn.innerHTML = 'Get OTP <i class="fas fa-arrow-right"></i>';
+            }
+        }
+
+        async function verifyOtp(e) {
+            e.preventDefault();
+            const code = document.getElementById('otpInput').value.trim();
+            const verifyBtn = document.getElementById('verifyBtn');
+
+            if (code.length < 6) {
+                alert("Please enter the 6-digit code.");
+                return;
+            }
+
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verifying...';
+
+            try {
+                if (!window.confirmationResult) {
+                    throw new Error("Session expired. Please request OTP again.");
+                }
+
+                // 1. Verify Code with Firebase
+                const result = await window.confirmationResult.confirm(code);
+                const user = result.user;
+                
+                console.log("User signed in successfully:", user.uid);
+                
+                // 2. Load Data
+                loginSubtext.textContent = "Verified! Logging in...";
+                let phone = user.phoneNumber.replace('+91', '');
+                await fetchCustomerData(phone);
+
+            } catch (error) {
+                console.error("Verification Error:", error);
+                alert("Incorrect code or error occurred. Please try again.");
+            } finally {
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = 'Verify & Login <i class="fas fa-check"></i>';
+            }
+        }
+
+        function resendOtp() {
+            // Reset recaptcha and trigger existing request logic
+            resetLogin();
+            // Note: In a real implementation, you might want to pass the existing recaptcha token or re-verify.
+            // For simplicity here, we send the user back to step 1 to trigger a clean re-send.
+        }
+
+        function resetLogin() {
+            phoneForm.classList.remove('hidden');
+            otpForm.classList.add('hidden');
+            document.getElementById('otpInput').value = '';
+            loginSubtext.textContent = "Enter your mobile number to receive a One-Time Password (OTP).";
+            
+            // Re-render ReCaptcha if needed
+            if(window.recaptchaVerifier) {
+                window.recaptchaVerifier.render().then(widgetId => {
+                    grecaptcha.reset(widgetId);
+                });
+            }
+        }
+
+        function startTimer() {
+            let timeLeft = 30;
+            const timerEl = document.getElementById('timer');
+            const resendLink = document.getElementById('resendLink');
+            
+            timerEl.style.display = 'inline';
+            resendLink.style.display = 'none';
+            
+            const interval = setInterval(() => {
+                timeLeft--;
+                timerEl.textContent = `Resend in ${timeLeft}s`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(interval);
+                    timerEl.style.display = 'none';
+                    resendLink.style.display = 'inline';
+                }
+            }, 1000);
+        }
+
+        // --- Data Fetching Logic ---
+
         async function fetchCustomerData(phone) {
-            showLoader();
+            showLoader("Loading your dashboard...");
             
             try {
-                // 1. Find Customer Document
+                // 1. Find Customer Document using the verified phone number
                 // We use collectionGroup to find the customer across all businesses
                 const customerSnapshot = await db.collectionGroup('customers')
                     .where('phone', '==', phone)
@@ -195,8 +377,10 @@
 
                 if (customerSnapshot.empty) {
                     hideLoader();
-                    alert('No customer found with this phone number. Please check with your water supplier.');
-                    localStorage.removeItem('portalPhone');
+                    // Even though they authenticated, they aren't in the DB as a customer
+                    auth.signOut(); // Sign them out so they don't get stuck
+                    loginSection.classList.remove('hidden');
+                    alert('Authentication successful, but no customer account found with this number.'); 
                     return;
                 }
 
@@ -209,17 +393,14 @@
                 const businessDocRef = customerDoc.ref.parent.parent;
                 currentBusinessId = businessDocRef.id;
 
-                // 3. Store login session
-                localStorage.setItem('portalPhone', phone);
-
-                // 4. Fetch All Required Data in Parallel
+                // 3. Fetch All Required Data in Parallel
                 await Promise.all([
                     fetchBusinessDetails(businessDocRef),
                     fetchDeliveries(businessDocRef),
                     fetchPayments(businessDocRef)
                 ]);
 
-                // 5. Update UI
+                // 4. Update UI
                 updateUI();
                 
                 loginSection.classList.add('hidden');
@@ -228,6 +409,9 @@
 
             } catch (error) {
                 console.error("Error fetching data:", error);
+                auth.signOut();
+                loginSection.classList.remove('hidden');
+                dashboardSection.classList.add('hidden');
                 alert("An error occurred while fetching your data. Please try again.");
             } finally {
                 hideLoader();
@@ -361,11 +545,15 @@
         };
 
         window.logoutCustomer = function() {
-            localStorage.removeItem('portalPhone');
-            location.reload();
+            auth.signOut().then(() => {
+                location.reload();
+            });
         };
 
-        function showLoader() { loader.classList.remove('hidden'); }
+        function showLoader(text = "Loading...") { 
+            document.getElementById('loaderText').textContent = text;
+            loader.classList.remove('hidden'); 
+        }
         function hideLoader() { loader.classList.add('hidden'); }
 
     </script>
