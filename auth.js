@@ -19,6 +19,10 @@ class AuthManager {
             this.authStateReady = true;
             
             if (user) {
+                // Load user data if we are already in the app
+                // Ensure document creation happens inside loadUserData if missing
+                await this.loadUserData(user);
+
                 // === UPDATED: Redirect Logic ===
                 // If we are on auth.html or index.html, redirect immediately to app
                 const path = window.location.pathname;
@@ -27,10 +31,6 @@ class AuthManager {
                     window.location.href = 'app.html';
                     return;
                 }
-
-                // Load user data if we are already in the app
-                await this.loadUserData(user);
-                
             } else {
                 // User is signed out
                 this.userData = null;
@@ -182,6 +182,34 @@ class AuthManager {
     }
 }
 
+    // === GOOGLE SIGN IN HANDLER ===
+    async handleGoogleSignIn() {
+        const googleBtn = document.getElementById('googleSignInBtn');
+        if (!googleBtn) return;
+
+        this.setButtonLoading(googleBtn, true, '<i class="fab fa-google"></i> Sign in with Google');
+
+        try {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            // Optional: force prompt to select account
+            provider.setCustomParameters({
+                prompt: 'select_account'
+            });
+            
+            await auth.signInWithPopup(provider);
+            showSuccess('Signed in successfully!');
+            // Redirect will be handled by onAuthStateChanged listener
+            
+        } catch (error) {
+            console.error('Google Sign In error:', error);
+            // Don't show generic error for popup closed by user
+            if (error.code !== 'auth/popup-closed-by-user') {
+                this.handleAuthError(error);
+            }
+            this.setButtonLoading(googleBtn, false, '<i class="fab fa-google"></i> Sign in with Google');
+        }
+    }
+
     // Handle Password Reset
     async handlePasswordReset(e) {
         e.preventDefault();
@@ -330,15 +358,38 @@ class AuthManager {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             // Using STRICT PATH rule from system instructions
-            const userDoc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
+            const userDocRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
             
             if (userDoc.exists) {
                 this.userData = userDoc.data();
                 this.userData.uid = user.uid;
                 localStorage.setItem('userData', JSON.stringify(this.userData));
                 return true;
+            } else {
+                // === NEW: Auto-Create Profile for Google Users ===
+                // This handles users who sign in via Google for the first time
+                console.log('User profile not found. Creating default profile for Google user...');
+                
+                const defaultData = {
+                    email: user.email,
+                    ownerName: user.displayName || 'Business Owner',
+                    businessName: (user.displayName ? user.displayName + "'s Business" : 'My Business'),
+                    businessPhone: '', // Not provided by Google
+                    businessAddress: '', // Not provided by Google
+                    defaultPrice: 20,
+                    subscription: 'free',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    status: 'active'
+                };
+                
+                await userDocRef.set(defaultData);
+                
+                this.userData = defaultData;
+                this.userData.uid = user.uid;
+                localStorage.setItem('userData', JSON.stringify(this.userData));
+                return true;
             }
-            return false;
         } catch (error) {
             console.error('Error loading user data:', error);
             return false;
@@ -381,6 +432,8 @@ class AuthManager {
             case 'auth/requires-recent-login':
                 message = 'Please sign out and sign back in to perform this action.';
                 break;
+            case 'auth/popup-closed-by-user':
+                return; // Do nothing if user closed popup
             default:
                 // Fallback for unexpected errors
                 console.error('Unhandled Auth Error:', error.message);
