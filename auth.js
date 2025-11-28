@@ -388,6 +388,10 @@ class AuthManager {
                 this.userData = defaultData;
                 this.userData.uid = user.uid;
                 localStorage.setItem('userData', JSON.stringify(this.userData));
+                
+                // Set flag for first-time setup to trigger modal in app.js
+                sessionStorage.setItem('showProfileSetup', 'true');
+                
                 return true;
             }
         } catch (error) {
