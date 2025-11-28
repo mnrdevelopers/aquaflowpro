@@ -421,6 +421,7 @@ textarea.form-input {
     max-width: 100%;
     margin: 0 auto;
     padding: var(--space-md);
+    margin-top: 25px;
 }
 
 .welcome-content {
