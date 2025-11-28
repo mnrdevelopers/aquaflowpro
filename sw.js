@@ -4,6 +4,7 @@ const urlsToCache = [
   '/aquaflowpro/index.html',
   '/aquaflowpro/auth.html',
   '/aquaflowpro/app.html',
+  '/aquaflowpro/customer-portal.html',
   '/aquaflowpro/styles.css',
   '/aquaflowpro/firebase-config.js',
   '/aquaflowpro/auth.js',
