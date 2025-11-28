@@ -90,7 +90,10 @@
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge hidden" id="notificationCount">0</span>
                 </button>
-                <!-- Deliveries and Settings moved to the Side Menu -->
+                <!-- NEW: Logout Button with Icon -->
+                <button class="btn btn-icon" onclick="confirmLogout()" title="Logout" style="margin-left: 8px; color: var(--danger); border-color: var(--gray-300);">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
             </div>
         </div>
     </header>
@@ -982,6 +985,13 @@ if ('serviceWorker' in navigator) {
             window.location.reload();
         }
     });
+}
+
+// NEW: Logout Confirmation
+function confirmLogout() {
+    if (confirm("Are you sure you want to log out?")) {
+        logout();
+    }
 }
 </script>
     
